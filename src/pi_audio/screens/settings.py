@@ -92,6 +92,7 @@ class SettingsScreen(Screen):
         else:
             setattr(self.settings, slider.key, clamped)
         self.settings.validate_and_clamp()
+        self.settings.save()
 
     def _fraction(self, slider: _SliderDef) -> float:
         val = self._get_value(slider)

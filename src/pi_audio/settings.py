@@ -1,3 +1,11 @@
+import json
+from pathlib import Path
+
+_SETTINGS_PATH = Path.home() / ".config" / "pi-audio" / "settings.json"
+
+_KEYS = ("history_seconds", "quiet_threshold", "moderate_threshold")
+
+
 class Settings:
     """Application settings that can be customized by the user."""
 
@@ -8,6 +16,8 @@ class Settings:
         # Sound level thresholds in dB(A)
         self.quiet_threshold: float = 75.0  # Safe/green zone upper limit
         self.moderate_threshold: float = 90.0  # Cautious/yellow zone upper limit
+
+        self._load()
 
     @property
     def history_length(self) -> int:
@@ -27,3 +37,23 @@ class Settings:
         self.moderate_threshold = max(
             self.quiet_threshold + 1.0, min(100.0, self.moderate_threshold)
         )
+
+    def save(self) -> None:
+        """Persist current settings to disk."""
+        data = {k: getattr(self, k) for k in _KEYS}
+        try:
+            _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _SETTINGS_PATH.write_text(json.dumps(data, indent=2) + "\n")
+        except OSError:
+            pass
+
+    def _load(self) -> None:
+        """Load settings from disk if available."""
+        try:
+            data = json.loads(_SETTINGS_PATH.read_text())
+            for k in _KEYS:
+                if k in data:
+                    setattr(self, k, type(getattr(self, k))(data[k]))
+            self.validate_and_clamp()
+        except (OSError, json.JSONDecodeError, ValueError):
+            pass
