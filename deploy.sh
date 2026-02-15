@@ -36,6 +36,11 @@ rsync -avz \
 
 echo -e "${GREEN}✓ Files synced to $PI_HOST:$PI_PATH${NC}"
 
+# Install desktop shortcut
+echo -e "${BLUE}Installing desktop shortcut...${NC}"
+ssh "$PI_HOST" "cp $PI_PATH/pi-audio.desktop ~/Desktop/ && chmod +x ~/Desktop/pi-audio.desktop"
+echo -e "${GREEN}✓ Desktop shortcut installed${NC}"
+
 if [[ "$RUN_APP" == true ]]; then
     echo -e "${BLUE}Running app on Pi...${NC}"
     echo -e "${BLUE}(Press Ctrl+C to stop, or use the EXIT button on the display)${NC}"
