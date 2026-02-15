@@ -5,7 +5,7 @@ import numpy as np
 import sounddevice as sd
 from scipy.signal import sosfilt, zpk2sos
 
-from pi_audio.config import BLOCK_SIZE, HISTORY_LENGTH, SAMPLE_RATE
+from pi_audio.config import BLOCK_SIZE, SAMPLE_RATE
 
 
 def _a_weighting_sos(fs: int) -> np.ndarray:
@@ -60,14 +60,25 @@ def _a_weighting_sos(fs: int) -> np.ndarray:
 
 
 class AudioCapture:
-    def __init__(self, sample_rate: int = SAMPLE_RATE, block_size: int = BLOCK_SIZE):
+    def __init__(
+        self,
+        sample_rate: int = SAMPLE_RATE,
+        block_size: int = BLOCK_SIZE,
+        history_length: int = 300,
+    ):
         self.sample_rate = sample_rate
         self.block_size = block_size
         self._sos = _a_weighting_sos(sample_rate)
         self._current_spl: float = 0.0
-        self._history: collections.deque[float] = collections.deque(maxlen=HISTORY_LENGTH)
+        self._history: collections.deque[float] = collections.deque(maxlen=history_length)
         self._lock = threading.Lock()
         self._stream: sd.InputStream | None = None
+
+    def set_history_length(self, new_length: int) -> None:
+        """Dynamically update the history buffer size."""
+        with self._lock:
+            old_data = list(self._history)
+            self._history = collections.deque(old_data, maxlen=new_length)
 
     def _callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
         if status:
