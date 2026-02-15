@@ -63,17 +63,24 @@ sudo nano /boot/firmware/config.txt
 
 Add at the end:
 ```ini
-# 1024x600 HDMI display
+hdmi_force_edid_audio=1
+max_usb_current=1
+hdmi_force_hotplug=1
+config_hdmi_boost=7
 hdmi_group=2
 hdmi_mode=87
-hdmi_cvt=1024 600 60 6 0 0 0
 hdmi_drive=2
+display_rotate=0                             
+hdmi_cvt 1024 600 60 6 0 0 0
 ```
 
 Save and reboot:
 ```bash
 sudo reboot
 ```
+
+These instructions came from the Hosyond documentation [wiki](https://www.lcdwiki.com/7inch_HDMI_Display-H) and [user manual](https://www.lcdwiki.com/res/MPI7006/7inch-HDMI-Display-H_User_Manual_V1.0.pdf).
+See that if things aren't working and you need more details on display setup.
 
 **Touch screen:** Should work automatically. If not, check manufacturer's documentation for drivers.
 
