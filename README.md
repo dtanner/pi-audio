@@ -52,6 +52,25 @@ uv run ruff format --check src/
 uv run ruff format src/
 ```
 
+### Deploying to Pi
+
+To deploy changes to your Raspberry Pi:
+
+```bash
+# Sync files to Pi
+./deploy.sh
+
+# Sync and run the app on Pi
+./deploy.sh --run
+```
+
+**Configuration:** Set environment variables to override defaults:
+```bash
+PI_HOST=pi@mypi.local PI_PATH=~/my-path ./deploy.sh
+```
+
+Default values: `PI_HOST=dan@piaudio.local`, `PI_PATH=~/pi-audio`
+
 ## Project Structure
 
 - `src/pi_audio/config.py` - Display, audio, and color constants

@@ -2,6 +2,9 @@ import pygame
 
 from pi_audio.config import (
     COLOR_BG,
+    COLOR_BUTTON_BG,
+    COLOR_BUTTON_HOVER,
+    COLOR_BUTTON_TEXT,
     COLOR_CHART_BG,
     COLOR_GREEN,
     COLOR_GRID,
@@ -37,12 +40,19 @@ class MeterScreen(Screen):
     CHART_RIGHT = 30
     CHART_BOTTOM = 40
 
+    # Exit button
+    EXIT_BUTTON_WIDTH = 100
+    EXIT_BUTTON_HEIGHT = 50
+    EXIT_BUTTON_MARGIN = 20
+
     def __init__(self):
         self._spl: float = 0.0
         self._history: list[float] = []
         self._font_large: pygame.font.Font | None = None
         self._font_medium: pygame.font.Font | None = None
         self._font_small: pygame.font.Font | None = None
+        self._exit_button_rect: pygame.Rect | None = None
+        self._exit_button_hovered: bool = False
 
     def _ensure_fonts(self) -> None:
         if self._font_large is None:
@@ -55,7 +65,14 @@ class MeterScreen(Screen):
         self._history = history
 
     def handle_event(self, event: pygame.event.Event) -> None:
-        pass
+        if event.type == pygame.MOUSEMOTION:
+            if self._exit_button_rect and self._exit_button_rect.collidepoint(event.pos):
+                self._exit_button_hovered = True
+            else:
+                self._exit_button_hovered = False
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._exit_button_rect and self._exit_button_rect.collidepoint(event.pos):
+                raise SystemExit
 
     def update(self, dt: float) -> None:
         pass
@@ -65,6 +82,7 @@ class MeterScreen(Screen):
         surface.fill(COLOR_BG)
         self._draw_readout(surface)
         self._draw_chart(surface)
+        self._draw_exit_button(surface)
 
     def _draw_readout(self, surface: pygame.Surface) -> None:
         color = _spl_color(self._spl)
@@ -132,3 +150,22 @@ class MeterScreen(Screen):
 
         # Chart border
         pygame.draw.rect(surface, COLOR_GRID, (chart_left, chart_top, chart_width, chart_height), 1)
+
+    def _draw_exit_button(self, surface: pygame.Surface) -> None:
+        # Position exit button in top-right corner
+        x = SCREEN_WIDTH - self.EXIT_BUTTON_WIDTH - self.EXIT_BUTTON_MARGIN
+        y = self.EXIT_BUTTON_MARGIN
+
+        self._exit_button_rect = pygame.Rect(x, y, self.EXIT_BUTTON_WIDTH, self.EXIT_BUTTON_HEIGHT)
+
+        # Choose color based on hover state
+        bg_color = COLOR_BUTTON_HOVER if self._exit_button_hovered else COLOR_BUTTON_BG
+
+        # Draw button background
+        pygame.draw.rect(surface, bg_color, self._exit_button_rect)
+        pygame.draw.rect(surface, COLOR_BUTTON_TEXT, self._exit_button_rect, 2)
+
+        # Draw button text
+        text = self._font_medium.render("EXIT", True, COLOR_BUTTON_TEXT)
+        text_rect = text.get_rect(center=self._exit_button_rect.center)
+        surface.blit(text, text_rect)

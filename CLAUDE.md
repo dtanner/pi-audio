@@ -15,13 +15,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 
 ```bash
-# Run the app
+# Run the app locally
 uv run python -m pi_audio
 
 # Lint
 uv run ruff check src/
 uv run ruff format --check src/
 ```
+
+## Deployment to Pi
+
+**Primary deployment target:** dan@piaudio.local
+
+Use `deploy.sh` to sync changes to the Pi:
+
+```bash
+# Sync files only
+./deploy.sh
+
+# Sync and run the app on Pi
+./deploy.sh --run
+```
+
+The script uses rsync to sync files and can optionally run the app on the Pi. Configuration:
+- **PI_HOST** environment variable (default: `dan@piaudio.local`)
+- **PI_PATH** environment variable (default: `~/pi-audio`)
+
+The Pi uses a pre-existing `.venv` directory. The app runs via `source .venv/bin/activate && python -m pi_audio` (not using `uv` on the Pi).
 
 ## Architecture
 
