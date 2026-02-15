@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Pi Audio
+Comment=Sound Level Display
+Exec=bash -c 'cd ~/pi-audio && source .venv/bin/activate && python -m pi_audio'
+Terminal=false
+Icon=audio-card
+Categories=AudioVideo;Audio;
