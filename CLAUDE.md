@@ -31,7 +31,41 @@ uv run ruff format --check src/
 - `src/pi_audio/screens/base.py` — abstract Screen base class
 - `src/pi_audio/screens/meter.py` — SPL readout + rolling history chart
 
-## Hardware Developed On
-Compute: Raspberry Pi 5. My testing device has 4GB of RAM
-Display: Hosyond 7 Inch IPS LCD Capacitive Touch Screen Pi Monitor 1024×600 HDMI
-Microphone: MillSO Portable Mini USB Computer Microphone Plug&Play
+## Hardware Compatibility
+
+**Design Philosophy:** Code should be hardware-agnostic. Use configuration over code changes.
+
+### Tested Hardware
+
+See [HARDWARE.md](HARDWARE.md) for complete list of tested configurations.
+
+**Primary test configuration:**
+- Raspberry Pi 5 (4GB)
+- Hosyond 7" 1024×600 HDMI display
+- MillSO USB microphone (ALSA card 2, device 0)
+- Full setup: [docs/hardware-configs/rpi5-hosyond-millso.md](docs/hardware-configs/rpi5-hosyond-millso.md)
+
+### Hardware Abstraction Strategy
+
+- **Audio Input:** Uses ALSA default device (no hardcoded device IDs)
+  - Users configure default via `~/.asoundrc` on their system
+  - App calls `sd.InputStream()` without device parameter
+  - This allows any USB microphone/interface to work without code changes
+
+- **Display:** pygame auto-detects resolution and capabilities
+  - No hardcoded display dimensions in rendering logic
+  - Users configure HDMI output via `/boot/firmware/config.txt`
+
+- **Configuration:** Hardware-specific values in `src/pi_audio/config.py`
+  - Sample rate, block size, history length
+  - Display colors and fonts
+  - Change here rather than in implementation files
+
+### Adding New Hardware Support
+
+When adding support for new hardware:
+1. Test the configuration works
+2. Document in `docs/hardware-configs/[hardware-name].md`
+3. Add to tested configurations in `HARDWARE.md`
+4. Note any required ALSA config, display settings, or driver requirements
+5. If code changes are needed, ensure they're generic (not hardware-specific)
