@@ -36,10 +36,16 @@ rsync -avz \
 
 echo -e "${GREEN}✓ Files synced to $PI_HOST:$PI_PATH${NC}"
 
-# Install desktop shortcut
-echo -e "${BLUE}Installing desktop shortcut...${NC}"
-ssh "$PI_HOST" "cp $PI_PATH/pi-audio.desktop ~/Desktop/ && chmod +x ~/Desktop/pi-audio.desktop"
-echo -e "${GREEN}✓ Desktop shortcut installed${NC}"
+# Install application and add to taskbar
+echo -e "${BLUE}Installing application...${NC}"
+ssh "$PI_HOST" "mkdir -p ~/.local/share/applications && cp $PI_PATH/pi-audio.desktop ~/.local/share/applications/"
+# Add pi-audio to the taskbar launchers if not already present
+ssh "$PI_HOST" "if ! grep -q 'pi-audio' ~/.config/wf-panel-pi/wf-panel-pi.ini 2>/dev/null; then
+    cp /etc/xdg/wf-panel-pi/wf-panel-pi.ini ~/.config/wf-panel-pi/wf-panel-pi.ini 2>/dev/null
+    sed -i 's/^launchers=.*/& pi-audio/' ~/.config/wf-panel-pi/wf-panel-pi.ini
+    echo 'Restart the panel or log out/in to see the taskbar launcher.'
+fi"
+echo -e "${GREEN}✓ Application installed (available in taskbar and app menu)${NC}"
 
 if [[ "$RUN_APP" == true ]]; then
     echo -e "${BLUE}Running app on Pi...${NC}"
