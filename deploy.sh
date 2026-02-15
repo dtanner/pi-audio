@@ -9,7 +9,7 @@
 set -e
 
 # Configuration (can be overridden via environment variables)
-PI_HOST="${PI_HOST:-dan@piaudio.local}"
+PI_HOST="${PI_HOST:-admin@piaudio.local}"
 PI_PATH="${PI_PATH:-~/pi-audio}"
 LOCAL_PATH="$(cd "$(dirname "$0")" && pwd)"
 

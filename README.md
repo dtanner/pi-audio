@@ -69,7 +69,7 @@ To deploy changes to your Raspberry Pi:
 PI_HOST=pi@mypi.local PI_PATH=~/my-path ./deploy.sh
 ```
 
-Default values: `PI_HOST=dan@piaudio.local`, `PI_PATH=~/pi-audio`
+Default values: `PI_HOST=admin@piaudio.local`, `PI_PATH=~/pi-audio`
 
 ## Project Structure
 

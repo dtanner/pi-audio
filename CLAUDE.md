@@ -25,7 +25,7 @@ uv run ruff format --check src/
 
 ## Deployment to Pi
 
-**Primary deployment target:** dan@piaudio.local
+**Primary deployment target:** admin@piaudio.local
 
 Use `deploy.sh` to sync changes to the Pi:
 
@@ -38,7 +38,7 @@ Use `deploy.sh` to sync changes to the Pi:
 ```
 
 The script uses rsync to sync files and can optionally run the app on the Pi. Configuration:
-- **PI_HOST** environment variable (default: `dan@piaudio.local`)
+- **PI_HOST** environment variable (default: `admin@piaudio.local`)
 - **PI_PATH** environment variable (default: `~/pi-audio`)
 
 The Pi uses a pre-existing `.venv` directory. The app runs via `source .venv/bin/activate && python -m pi_audio` (not using `uv` on the Pi).
