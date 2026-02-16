@@ -47,12 +47,17 @@ class MeterScreen(Screen):
     MENU_DROPDOWN_WIDTH = 160
     MENU_ITEM_HEIGHT = 44
 
+    # Pause button dimensions
+    PAUSE_SIZE = 60
+
     def __init__(self, settings: Settings, on_settings: callable):
         self.settings = settings
         self.on_settings = on_settings
         self._spl: float = 0.0
         self._history: list[float] = []
         self._spectrogram: list[np.ndarray] = []
+        self._paused: bool = False
+        self._pause_btn_rect: pygame.Rect | None = None
         self._spec_renderer = SpectrogramRenderer(
             SAMPLE_RATE,
             BLOCK_SIZE,
@@ -101,9 +106,10 @@ class MeterScreen(Screen):
         spectrogram: list[np.ndarray] | None = None,
     ) -> None:
         self._spl = spl
-        self._history = history
-        if spectrogram is not None:
-            self._spectrogram = spectrogram
+        if not self._paused:
+            self._history = history
+            if spectrogram is not None:
+                self._spectrogram = spectrogram
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.MOUSEMOTION:
@@ -130,6 +136,8 @@ class MeterScreen(Screen):
                     raise SystemExit
                 else:
                     self._menu_open = False
+            elif self._pause_btn_rect and self._pause_btn_rect.collidepoint(event.pos):
+                self._paused = not self._paused
             elif self._overtones_btn_rect and self._overtones_btn_rect.collidepoint(event.pos):
                 self._toggle_button("overtones")
             elif self._meter_btn_rect and self._meter_btn_rect.collidepoint(event.pos):
@@ -147,6 +155,8 @@ class MeterScreen(Screen):
             self._draw_readout(surface)
         self._draw_chart(surface)
         self._draw_toggle_buttons(surface)
+        if self.settings.display_mode != "value_only":
+            self._draw_pause_button(surface)
         self._draw_menu(surface)
         if self._help_open:
             self._draw_help_modal(surface)
@@ -182,6 +192,9 @@ class MeterScreen(Screen):
 
         self.settings.display_mode = new_mode
         self.settings.save()
+        if new_mode == "value_only":
+            self._paused = False
+            self._pause_btn_rect = None
 
     def _draw_toggle_buttons(self, surface: pygame.Surface) -> None:
         """Draw two toggle buttons in the upper-left corner using icon images."""
@@ -222,6 +235,50 @@ class MeterScreen(Screen):
             # Border
             border_color = COLOR_SLIDER_FILL if on else COLOR_GRID
             pygame.draw.rect(surface, border_color, rect, 2, border_radius=4)
+
+    def _draw_pause_button(self, surface: pygame.Surface) -> None:
+        """Draw pause/play button between the readout and the hamburger menu."""
+        sz = self.PAUSE_SIZE
+        # Center horizontally between the right edge of the readout and the hamburger menu
+        readout_right = SCREEN_WIDTH // 2 + self._font_large.size("00.0")[0] // 2
+        menu_left = SCREEN_WIDTH - self.MENU_ICON_SIZE - self.MENU_ICON_MARGIN
+        bx = (readout_right + menu_left) // 2 - sz // 2
+        by = (self.READOUT_HEIGHT - sz) // 2
+        self._pause_btn_rect = pygame.Rect(bx, by, sz, sz)
+
+        # Button background
+        bg = COLOR_BUTTON_BG
+        pygame.draw.rect(surface, bg, self._pause_btn_rect, border_radius=6)
+        pygame.draw.rect(surface, COLOR_GRID, self._pause_btn_rect, 2, border_radius=6)
+
+        cx = bx + sz // 2
+        cy = by + sz // 2
+
+        if self._paused:
+            # Play triangle
+            tri_h = sz * 0.5
+            tri_w = tri_h * 0.8
+            points = [
+                (cx - tri_w // 2 + 2, cy - tri_h // 2),
+                (cx - tri_w // 2 + 2, cy + tri_h // 2),
+                (cx + tri_w // 2 + 2, cy),
+            ]
+            pygame.draw.polygon(surface, COLOR_TEXT, points)
+        else:
+            # Pause bars
+            bar_h = int(sz * 0.45)
+            bar_w = int(sz * 0.12)
+            gap = int(sz * 0.1)
+            pygame.draw.rect(
+                surface,
+                COLOR_TEXT,
+                (cx - gap - bar_w, cy - bar_h // 2, bar_w, bar_h),
+            )
+            pygame.draw.rect(
+                surface,
+                COLOR_TEXT,
+                (cx + gap, cy - bar_h // 2, bar_w, bar_h),
+            )
 
     def _draw_value_only(self, surface: pygame.Surface) -> None:
         """Draw the SPL value as a large centered number."""
