@@ -7,10 +7,12 @@ _KEYS = (
     "history_seconds",
     "quiet_threshold",
     "moderate_threshold",
-    "display_mode",
+    "active_panels",
     "overtone_freq_min",
     "overtone_freq_max",
 )
+
+_VALID_PANELS = ("overtones", "meter", "pitch")
 
 
 class Settings:
@@ -24,14 +26,31 @@ class Settings:
         self.quiet_threshold: float = 75.0  # Safe/green zone upper limit
         self.moderate_threshold: float = 90.0  # Cautious/yellow zone upper limit
 
-        # Display mode: "meter", "overtones", or "both"
-        self.display_mode: str = "both"
+        # Active display panels: ordered list of up to 2 from ["overtones", "meter", "pitch"]
+        self.active_panels: list[str] = ["overtones", "meter"]
 
         # Overtone frequency range in Hz (allowed: 40–8000)
         self.overtone_freq_min: int = 100
         self.overtone_freq_max: int = 4000
 
         self._load()
+
+    @property
+    def display_mode(self) -> str:
+        """Derived display_mode for backward compatibility."""
+        panels = set(self.active_panels)
+        if panels == {"overtones", "meter"}:
+            return "both"
+        elif panels == {"overtones"}:
+            return "overtones"
+        elif panels == {"meter"}:
+            return "meter"
+        elif len(panels) == 0:
+            return "value_only"
+        # For any other combination (involving pitch), return a generic mode
+        if len(panels) == 2:
+            return "dual"
+        return self.active_panels[0]
 
     @property
     def history_length(self) -> int:
@@ -52,9 +71,16 @@ class Settings:
             max(60.0, self.quiet_threshold + 1.0), min(100.0, self.moderate_threshold)
         )
 
-        # Display mode
-        if self.display_mode not in ("meter", "overtones", "both", "value_only"):
-            self.display_mode = "both"
+        # Active panels: max 2, only valid names, preserve order
+        self.active_panels = [p for p in self.active_panels if p in _VALID_PANELS]
+        # Remove duplicates while preserving order
+        seen = set()
+        deduped = []
+        for p in self.active_panels:
+            if p not in seen:
+                seen.add(p)
+                deduped.append(p)
+        self.active_panels = deduped[:2]
 
         # Overtone frequency range: 40–8000 Hz, min < max
         self.overtone_freq_min = max(40, min(7999, self.overtone_freq_min))
@@ -62,7 +88,9 @@ class Settings:
 
     def save(self) -> None:
         """Persist current settings to disk."""
-        data = {k: getattr(self, k) for k in _KEYS}
+        data = {}
+        for k in _KEYS:
+            data[k] = getattr(self, k)
         try:
             _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
             _SETTINGS_PATH.write_text(json.dumps(data, indent=2) + "\n")
@@ -73,9 +101,29 @@ class Settings:
         """Load settings from disk if available."""
         try:
             data = json.loads(_SETTINGS_PATH.read_text())
+
+            # Backward compatibility: convert old display_mode to active_panels
+            if "display_mode" in data and "active_panels" not in data:
+                old_mode = data.pop("display_mode")
+                if old_mode == "both":
+                    data["active_panels"] = ["overtones", "meter"]
+                elif old_mode == "overtones":
+                    data["active_panels"] = ["overtones"]
+                elif old_mode == "meter":
+                    data["active_panels"] = ["meter"]
+                elif old_mode == "value_only":
+                    data["active_panels"] = []
+                # else: keep default
+
             for k in _KEYS:
                 if k in data:
-                    setattr(self, k, type(getattr(self, k))(data[k]))
+                    val = data[k]
+                    default = getattr(self, k)
+                    if isinstance(default, list):
+                        if isinstance(val, list):
+                            setattr(self, k, val)
+                    else:
+                        setattr(self, k, type(default)(val))
             self.validate_and_clamp()
         except (OSError, json.JSONDecodeError, ValueError):
             pass

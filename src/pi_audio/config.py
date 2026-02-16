@@ -33,6 +33,7 @@ COLOR_SLIDER_HANDLE = (220, 220, 230)
 COLOR_SLIDER_HANDLE_ACTIVE = (255, 255, 255)
 COLOR_DIVIDER = (50, 50, 65)
 COLOR_LABEL_DIM = (140, 140, 160)
+COLOR_PITCH = (230, 120, 60)  # warm orange for pitch display
 
 # Spectrogram settings
 SPEC_FREQ_MIN = 50.0  # Hz — practical lower bound for USB mics

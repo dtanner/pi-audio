@@ -7,6 +7,7 @@ from scipy.signal import sosfilt, zpk2sos
 from scipy.signal.windows import blackmanharris
 
 from pi_audio.config import BLOCK_SIZE, FFT_SIZE, SAMPLE_RATE
+from pi_audio.pitch import yin_pitch
 
 
 def _a_weighting_sos(fs: int) -> np.ndarray:
@@ -73,6 +74,10 @@ class AudioCapture:
         self._current_spl: float = 0.0
         self._history: collections.deque[float] = collections.deque(maxlen=history_length)
         self._spectrogram: collections.deque[np.ndarray] = collections.deque(maxlen=history_length)
+        self._current_pitch: float | None = None
+        self._pitch_history: collections.deque[float | None] = collections.deque(
+            maxlen=history_length
+        )
         self._window = blackmanharris(block_size)
         self._lock = threading.Lock()
         self._stream: sd.InputStream | None = None
@@ -84,6 +89,8 @@ class AudioCapture:
             self._history = collections.deque(old_data, maxlen=new_length)
             old_spec = list(self._spectrogram)
             self._spectrogram = collections.deque(old_spec, maxlen=new_length)
+            old_pitch = list(self._pitch_history)
+            self._pitch_history = collections.deque(old_pitch, maxlen=new_length)
 
     def _callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
         if status:
@@ -106,10 +113,15 @@ class AudioCapture:
         with np.errstate(divide="ignore"):
             mag_db = 20 * np.log10(magnitude + 1e-20)
 
+        # Pitch detection on raw audio
+        pitch = yin_pitch(audio, self.sample_rate)
+
         with self._lock:
             self._current_spl = db
             self._history.append(db)
             self._spectrogram.append(mag_db)
+            self._current_pitch = pitch
+            self._pitch_history.append(pitch)
 
     @property
     def current_spl(self) -> float:
@@ -125,6 +137,16 @@ class AudioCapture:
     def spectrogram(self) -> list[np.ndarray]:
         with self._lock:
             return list(self._spectrogram)
+
+    @property
+    def current_pitch(self) -> float | None:
+        with self._lock:
+            return self._current_pitch
+
+    @property
+    def pitch_history(self) -> list[float | None]:
+        with self._lock:
+            return list(self._pitch_history)
 
     def start(self) -> None:
         self._stream = sd.InputStream(

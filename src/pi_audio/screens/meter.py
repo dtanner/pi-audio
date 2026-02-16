@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,7 @@ from pi_audio.config import (
     COLOR_GREEN,
     COLOR_GRID,
     COLOR_LABEL_DIM,
+    COLOR_PITCH,
     COLOR_RED,
     COLOR_SLIDER_FILL,
     COLOR_TEXT,
@@ -23,6 +25,7 @@ from pi_audio.config import (
     SPL_MAX,
     SPL_MIN,
 )
+from pi_audio.pitch import freq_to_note
 from pi_audio.screens.base import Screen
 from pi_audio.settings import Settings
 from pi_audio.spectrogram import SpectrogramRenderer
@@ -33,9 +36,11 @@ class MeterScreen(Screen):
     READOUT_HEIGHT = 90
     CHART_LEFT_SPL = 80  # left margin when SPL y-axis labels are needed
     CHART_LEFT_SPEC = 50  # left margin for spectrogram freq labels
+    CHART_LEFT_PITCH = 50  # left margin for pitch note labels
     CHART_RIGHT = 20
     CHART_BOTTOM = 40
     CHART_BOTTOM_SPEC = 10  # less bottom margin when no time labels
+    CHART_BOTTOM_PITCH = 10
 
     # Toggle button dimensions (match hamburger menu sizing/margin)
     TOGGLE_SIZE = 40
@@ -51,12 +56,20 @@ class MeterScreen(Screen):
     # Pause button dimensions
     PAUSE_SIZE = 60
 
+    # Pitch chart constants
+    PITCH_OCTAVES_VISIBLE = 2.0  # how many octaves to show at once
+
+    # All panel names in toggle order
+    _PANEL_NAMES = ["overtones", "meter", "pitch"]
+
     def __init__(self, settings: Settings, on_settings: callable):
         self.settings = settings
         self.on_settings = on_settings
         self._spl: float = 0.0
         self._history: list[float] = []
         self._spectrogram: list[np.ndarray] = []
+        self._pitch: float | None = None
+        self._pitch_history: list[float | None] = []
         self._paused: bool = False
         self._pause_btn_rect: pygame.Rect | None = None
         self._spec_renderer = SpectrogramRenderer(
@@ -71,10 +84,12 @@ class MeterScreen(Screen):
         self._font_small: pygame.font.Font | None = None
         self._font_icon: pygame.font.Font | None = None
         self._font_value_only: pygame.font.Font | None = None
-        self._overtones_btn_rect: pygame.Rect | None = None
-        self._meter_btn_rect: pygame.Rect | None = None
+        self._font_pitch_large: pygame.font.Font | None = None
+        self._font_pitch_cents: pygame.font.Font | None = None
+        self._toggle_btn_rects: dict[str, pygame.Rect] = {}
         self._icon_overtones: pygame.Surface | None = None
         self._icon_meter: pygame.Surface | None = None
+        self._icon_pitch: pygame.Surface | None = None
         self._menu_icon_rect: pygame.Rect | None = None
         self._menu_open: bool = False
         self._menu_settings_rect: pygame.Rect | None = None
@@ -91,6 +106,8 @@ class MeterScreen(Screen):
             self._font_small = pygame.font.SysFont("monospace", 18)
             self._font_icon = pygame.font.SysFont("monospace", 20)
             self._font_value_only = pygame.font.SysFont("monospace", 260, bold=True)
+            self._font_pitch_large = pygame.font.SysFont("monospace", 56, bold=True)
+            self._font_pitch_cents = pygame.font.SysFont("monospace", 28)
             # Load toggle button icons
             assets = Path(__file__).resolve().parent.parent / "assets"
             sz = self.TOGGLE_SIZE - 4  # leave room for border
@@ -100,18 +117,26 @@ class MeterScreen(Screen):
             self._icon_meter = pygame.transform.smoothscale(
                 pygame.image.load(str(assets / "icon_meter.png")).convert(), (sz, sz)
             )
+            self._icon_pitch = pygame.transform.smoothscale(
+                pygame.image.load(str(assets / "icon_pitch.png")).convert(), (sz, sz)
+            )
 
     def set_audio_data(
         self,
         spl: float,
         history: list[float],
         spectrogram: list[np.ndarray] | None = None,
+        pitch: float | None = None,
+        pitch_history: list[float | None] | None = None,
     ) -> None:
         self._spl = spl
+        self._pitch = pitch
         if not self._paused:
             self._history = history
             if spectrogram is not None:
                 self._spectrogram = spectrogram
+            if pitch_history is not None:
+                self._pitch_history = pitch_history
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.MOUSEMOTION:
@@ -140,12 +165,14 @@ class MeterScreen(Screen):
                     self._menu_open = False
             elif self._pause_btn_rect and self._pause_btn_rect.collidepoint(event.pos):
                 self._paused = not self._paused
-            elif self._overtones_btn_rect and self._overtones_btn_rect.collidepoint(event.pos):
-                self._toggle_button("overtones")
-            elif self._meter_btn_rect and self._meter_btn_rect.collidepoint(event.pos):
-                self._toggle_button("meter")
             elif self._menu_icon_rect and self._menu_icon_rect.collidepoint(event.pos):
                 self._menu_open = True
+            else:
+                # Check toggle buttons
+                for name, rect in self._toggle_btn_rects.items():
+                    if rect.collidepoint(event.pos):
+                        self._toggle_panel(name)
+                        break
 
     def update(self, dt: float) -> None:
         pass
@@ -153,11 +180,12 @@ class MeterScreen(Screen):
     def draw(self, surface: pygame.Surface) -> None:
         self._ensure_fonts()
         surface.fill(COLOR_BG)
-        if self.settings.display_mode != "value_only":
+        panels = self.settings.active_panels
+        if len(panels) > 0:
             self._draw_readout(surface)
         self._draw_chart(surface)
         self._draw_toggle_buttons(surface)
-        if self.settings.display_mode != "value_only":
+        if len(panels) > 0:
             self._draw_pause_button(surface)
         self._draw_menu(surface)
         if self._help_open:
@@ -172,51 +200,46 @@ class MeterScreen(Screen):
         else:
             return COLOR_RED
 
-    def _toggle_button(self, which: str) -> None:
-        """Toggle a display mode button and compute the new mode."""
-        mode = self.settings.display_mode
-        overtones_on = mode in ("overtones", "both")
-        meter_on = mode in ("meter", "both")
-
-        if which == "overtones":
-            overtones_on = not overtones_on
+    def _toggle_panel(self, name: str) -> None:
+        """Toggle a panel on/off, enforcing max 2 active panels."""
+        panels = list(self.settings.active_panels)
+        if name in panels:
+            # Turning off
+            panels.remove(name)
         else:
-            meter_on = not meter_on
+            # Turning on
+            if len(panels) >= 2:
+                # Auto-deactivate the leftmost active panel
+                panels.pop(0)
+            panels.append(name)
 
-        if overtones_on and meter_on:
-            new_mode = "both"
-        elif overtones_on:
-            new_mode = "overtones"
-        elif meter_on:
-            new_mode = "meter"
-        else:
-            new_mode = "value_only"
-
-        self.settings.display_mode = new_mode
+        self.settings.active_panels = panels
         self.settings.save()
-        if new_mode == "value_only":
+        if len(panels) == 0:
             self._paused = False
             self._pause_btn_rect = None
 
     def _draw_toggle_buttons(self, surface: pygame.Surface) -> None:
-        """Draw two toggle buttons in the upper-left corner using icon images."""
-        mode = self.settings.display_mode
-        overtones_on = mode in ("overtones", "both")
-        meter_on = mode in ("meter", "both")
+        """Draw three toggle buttons in the upper-left corner using icon images."""
+        panels = self.settings.active_panels
+        icons = {
+            "overtones": self._icon_overtones,
+            "meter": self._icon_meter,
+            "pitch": self._icon_pitch,
+        }
 
         x = self.TOGGLE_MARGIN
         y = self.TOGGLE_MARGIN
         sz = self.TOGGLE_SIZE
 
-        for i, (on, icon, attr) in enumerate(
-            [
-                (overtones_on, self._icon_overtones, "_overtones_btn_rect"),
-                (meter_on, self._icon_meter, "_meter_btn_rect"),
-            ]
-        ):
+        self._toggle_btn_rects.clear()
+        for i, name in enumerate(self._PANEL_NAMES):
+            on = name in panels
+            icon = icons.get(name)
+
             bx = x + i * (sz + self.TOGGLE_GAP)
             rect = pygame.Rect(bx, y, sz, sz)
-            setattr(self, attr, rect)
+            self._toggle_btn_rects[name] = rect
 
             # Background fill
             bg = COLOR_SLIDER_FILL if on else COLOR_BUTTON_BG
@@ -242,7 +265,7 @@ class MeterScreen(Screen):
         """Draw pause/play button between the readout and the hamburger menu."""
         sz = self.PAUSE_SIZE
         # Center horizontally between the right edge of the readout and the hamburger menu
-        readout_right = SCREEN_WIDTH // 2 + self._font_large.size("00.0")[0] // 2
+        readout_right = SCREEN_WIDTH * 3 // 4 + 60
         menu_left = SCREEN_WIDTH - self.MENU_ICON_SIZE - self.MENU_ICON_MARGIN
         bx = (readout_right + menu_left) // 2 - sz // 2
         by = (self.READOUT_HEIGHT - sz) // 2
@@ -296,47 +319,127 @@ class MeterScreen(Screen):
         surface.blit(label, label_rect)
 
     def _draw_readout(self, surface: pygame.Surface) -> None:
-        color = self._spl_color(self._spl)
+        panels = self.settings.active_panels
+        has_pitch_panel = "pitch" in panels
 
-        # Main number — positioned near the top
+        # SPL value on the left side
+        color = self._spl_color(self._spl)
         text = f"{self._spl:5.1f}"
         rendered = self._font_large.render(text, True, color)
-        rect = rendered.get_rect(centerx=SCREEN_WIDTH // 2, centery=self.READOUT_HEIGHT // 2 + 2)
-        surface.blit(rendered, rect)
+
+        if has_pitch_panel:
+            # SPL on left, pitch on right
+            spl_rect = rendered.get_rect(
+                centerx=SCREEN_WIDTH // 4, centery=self.READOUT_HEIGHT // 2 + 2
+            )
+        else:
+            # SPL centered (original behavior)
+            spl_rect = rendered.get_rect(
+                centerx=SCREEN_WIDTH // 2, centery=self.READOUT_HEIGHT // 2 + 2
+            )
+        surface.blit(rendered, spl_rect)
+
+        # Always show pitch info in the readout when pitch panel is active
+        if has_pitch_panel:
+            self._draw_pitch_readout(surface)
+
+    def _draw_pitch_readout(self, surface: pygame.Surface) -> None:
+        """Draw pitch note name + cents deviation on the right side of the readout."""
+        cx = SCREEN_WIDTH * 3 // 4
+        cy = self.READOUT_HEIGHT // 2
+
+        if self._pitch is not None:
+            note_name, octave, cents = freq_to_note(self._pitch)
+            # Note name + octave (large)
+            note_text = f"{note_name}{octave}"
+            note_surf = self._font_pitch_large.render(note_text, True, COLOR_PITCH)
+            note_rect = note_surf.get_rect(centerx=cx - 30, centery=cy)
+            surface.blit(note_surf, note_rect)
+
+            # Cents deviation (smaller, to the right)
+            if cents >= 0:
+                cents_text = f"+{cents}"
+            else:
+                cents_text = f"{cents}"
+            if abs(cents) <= 10:
+                cents_color = COLOR_GREEN
+            elif abs(cents) <= 25:
+                cents_color = COLOR_YELLOW
+            else:
+                cents_color = COLOR_RED
+            cents_surf = self._font_pitch_cents.render(cents_text, True, cents_color)
+            cents_rect = cents_surf.get_rect(left=note_rect.right + 8, centery=cy)
+            surface.blit(cents_surf, cents_rect)
+
+            # Frequency in small text below
+            freq_text = f"{self._pitch:.1f} Hz"
+            freq_surf = self._font_small.render(freq_text, True, COLOR_LABEL_DIM)
+            freq_rect = freq_surf.get_rect(centerx=cx, top=note_rect.bottom + 2)
+            surface.blit(freq_surf, freq_rect)
+        else:
+            # No pitch detected
+            dash_surf = self._font_pitch_large.render("---", True, COLOR_LABEL_DIM)
+            dash_rect = dash_surf.get_rect(centerx=cx, centery=cy)
+            surface.blit(dash_surf, dash_rect)
 
     def _draw_chart(self, surface: pygame.Surface) -> None:
         chart_top = self.READOUT_HEIGHT + 5
-        mode = self.settings.display_mode
+        panels = self.settings.active_panels
+        num_panels = len(panels)
 
-        if mode == "value_only":
+        if num_panels == 0:
             self._draw_value_only(surface)
             return
-        elif mode == "meter":
-            chart_left = self.CHART_LEFT_SPL
+
+        if num_panels == 1:
+            # Single panel: full width
+            panel = panels[0]
+            left, bottom_margin = self._panel_margins(panel)
             chart_right = SCREEN_WIDTH - self.CHART_RIGHT
-            chart_bottom = SCREEN_HEIGHT - self.CHART_BOTTOM
-            chart_width = chart_right - chart_left
+            chart_bottom = SCREEN_HEIGHT - bottom_margin
+            chart_width = chart_right - left
             chart_height = chart_bottom - chart_top
-            self._draw_spl_chart(surface, chart_left, chart_top, chart_width, chart_height)
-        elif mode == "overtones":
-            chart_left = self.CHART_LEFT_SPEC
-            chart_right = SCREEN_WIDTH - self.CHART_RIGHT
-            chart_bottom = SCREEN_HEIGHT - self.CHART_BOTTOM_SPEC
-            chart_width = chart_right - chart_left
-            chart_height = chart_bottom - chart_top
-            self._draw_spectrogram(surface, chart_left, chart_top, chart_width, chart_height)
-        else:  # "both"
-            chart_bottom_spec = SCREEN_HEIGHT - self.CHART_BOTTOM_SPEC
-            chart_bottom_spl = SCREEN_HEIGHT - self.CHART_BOTTOM
-            gap = 60  # room for SPL y-axis labels between the two charts
-            total_width = SCREEN_WIDTH - self.CHART_LEFT_SPEC - self.CHART_RIGHT
+            self._draw_panel(surface, panel, left, chart_top, chart_width, chart_height)
+
+        elif num_panels == 2:
+            # Two panels side-by-side
+            gap = 60
+            total_width = SCREEN_WIDTH - self._panel_margins(panels[0])[0] - self.CHART_RIGHT
             half = (total_width - gap) // 2
-            spec_left = self.CHART_LEFT_SPEC
-            spec_height = chart_bottom_spec - chart_top
-            self._draw_spectrogram(surface, spec_left, chart_top, half, spec_height)
-            spl_left = spec_left + half + gap
-            spl_height = chart_bottom_spl - chart_top
-            self._draw_spl_chart(surface, spl_left, chart_top, total_width - half - gap, spl_height)
+
+            # Left panel
+            left_margin, bottom_margin_l = self._panel_margins(panels[0])
+            chart_bottom_l = SCREEN_HEIGHT - bottom_margin_l
+            height_l = chart_bottom_l - chart_top
+            self._draw_panel(surface, panels[0], left_margin, chart_top, half, height_l)
+
+            # Right panel
+            right_left = left_margin + half + gap
+            _, bottom_margin_r = self._panel_margins(panels[1])
+            chart_bottom_r = SCREEN_HEIGHT - bottom_margin_r
+            height_r = chart_bottom_r - chart_top
+            self._draw_panel(
+                surface, panels[1], right_left, chart_top, total_width - half - gap, height_r
+            )
+
+    def _panel_margins(self, panel: str) -> tuple[int, int]:
+        """Return (left_margin, bottom_margin) for a given panel type."""
+        if panel == "meter":
+            return self.CHART_LEFT_SPL, self.CHART_BOTTOM
+        elif panel == "overtones":
+            return self.CHART_LEFT_SPEC, self.CHART_BOTTOM_SPEC
+        else:  # pitch
+            return self.CHART_LEFT_PITCH, self.CHART_BOTTOM_PITCH
+
+    def _draw_panel(
+        self, surface: pygame.Surface, panel: str, left: int, top: int, width: int, height: int
+    ) -> None:
+        if panel == "meter":
+            self._draw_spl_chart(surface, left, top, width, height)
+        elif panel == "overtones":
+            self._draw_spectrogram(surface, left, top, width, height)
+        elif panel == "pitch":
+            self._draw_pitch_chart(surface, left, top, width, height)
 
     def _draw_spectrogram(
         self, surface: pygame.Surface, left: int, top: int, width: int, height: int
@@ -399,6 +502,92 @@ class MeterScreen(Screen):
             db_val = self._history[i]
             color = self._spl_color(db_val)
             pygame.draw.line(surface, color, points[i - 1], points[i], 2)
+
+        # Chart border
+        pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
+
+    def _draw_pitch_chart(
+        self, surface: pygame.Surface, left: int, top: int, width: int, height: int
+    ) -> None:
+        """Draw a Melodyne-style piano-roll pitch history chart."""
+        right = left + width
+        bottom = top + height
+
+        # Chart background
+        pygame.draw.rect(surface, COLOR_CHART_BG, (left, top, width, height))
+
+        # Determine Y-axis range based on recent pitch data
+        valid_pitches = [p for p in self._pitch_history if p is not None]
+
+        if len(valid_pitches) < 2:
+            # Not enough data — draw empty chart
+            pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
+            no_data = self._font_small.render("Listening...", True, COLOR_LABEL_DIM)
+            surface.blit(
+                no_data,
+                no_data.get_rect(center=(left + width // 2, top + height // 2)),
+            )
+            return
+
+        # Compute range: center on median pitch, show ~2 octaves
+        median_pitch = sorted(valid_pitches)[len(valid_pitches) // 2]
+        # Convert to semitones from A4 for easier math
+        median_semi = 12.0 * math.log2(median_pitch / 440.0) + 69  # MIDI note number
+        half_range = self.PITCH_OCTAVES_VISIBLE * 12 / 2  # semitones
+        semi_min = median_semi - half_range
+        semi_max = median_semi + half_range
+        semi_range = semi_max - semi_min
+
+        # Draw semitone grid lines with note labels
+        note_names = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+        first_semi = int(math.ceil(semi_min))
+        last_semi = int(math.floor(semi_max))
+
+        for semi in range(first_semi, last_semi + 1):
+            frac = (semi - semi_min) / semi_range
+            y = bottom - int(frac * height)
+            if y < top or y > bottom:
+                continue
+
+            note_idx = semi % 12
+            is_natural = note_names[note_idx] in ("C", "D", "E", "F", "G", "A", "B")
+
+            # Grid line: brighter for natural notes
+            line_color = (60, 60, 75) if is_natural else (40, 40, 52)
+            pygame.draw.line(surface, line_color, (left, y), (right, y))
+
+            # Label for natural notes only (to avoid clutter)
+            if is_natural:
+                octave = semi // 12 - 1
+                label_text = f"{note_names[note_idx]}{octave}"
+                label = self._font_small.render(label_text, True, COLOR_LABEL_DIM)
+                lx = left - label.get_width() - 6
+                ly = y - label.get_height() // 2
+                ly = max(top, min(bottom - label.get_height(), ly))
+                surface.blit(label, (lx, ly))
+
+        # Plot pitch trace
+        n = len(self._pitch_history)
+        history_len = max(self.settings.history_length, 1)
+        prev_point = None
+
+        for i, pitch in enumerate(self._pitch_history):
+            if pitch is None:
+                prev_point = None
+                continue
+
+            x = right - (n - 1 - i) / max(history_len - 1, 1) * width
+            semi = 12.0 * math.log2(pitch / 440.0) + 69
+            frac = (semi - semi_min) / semi_range
+            y = bottom - frac * height
+
+            cur_point = (x, y)
+            if prev_point is not None:
+                pygame.draw.line(surface, COLOR_PITCH, prev_point, cur_point, 2)
+            else:
+                # Draw a dot for isolated points
+                pygame.draw.circle(surface, COLOR_PITCH, (int(x), int(y)), 2)
+            prev_point = cur_point
 
         # Chart border
         pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
@@ -495,7 +684,7 @@ class MeterScreen(Screen):
         surface.blit(overlay, (0, 0))
 
         # Modal box
-        modal_w, modal_h = 700, 420
+        modal_w, modal_h = 700, 480
         mx = (SCREEN_WIDTH - modal_w) // 2
         my = (SCREEN_HEIGHT - modal_h) // 2
         modal_rect = pygame.Rect(mx, my, modal_w, modal_h)
@@ -540,11 +729,19 @@ class MeterScreen(Screen):
                 ],
             ),
             (
+                "Pitch Detection",
+                [
+                    "Detects the fundamental pitch of monophonic sound",
+                    "using the YIN algorithm. Shows note name, octave,",
+                    "and cents deviation. Piano-roll chart shows history.",
+                ],
+            ),
+            (
                 "Display Modes",
                 [
-                    "Use the toggle buttons (top-left) to show the",
-                    "spectrogram, level history, both side-by-side,",
-                    "or just the current dB value.",
+                    "Use the toggle buttons (top-left) to show up to",
+                    "two panels at once. Tap a third to auto-replace",
+                    "the first active panel.",
                 ],
             ),
         ]
