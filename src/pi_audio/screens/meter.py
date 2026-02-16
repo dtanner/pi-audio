@@ -306,20 +306,17 @@ class MeterScreen(Screen):
 
     def _draw_value_only(self, surface: pygame.Surface) -> None:
         """Draw the SPL and pitch as large centered values when no panels are active."""
-        cy = SCREEN_HEIGHT // 2
+        # Available vertical region: below toggle buttons/menu to screen bottom
+        top_reserved = self.TOGGLE_MARGIN + self.TOGGLE_SIZE + self.TOGGLE_MARGIN
+        available_top = top_reserved
+        available_bottom = SCREEN_HEIGHT
 
-        # SPL value (large, left-center)
+        # Pre-render SPL surface
         color = self._spl_color(self._spl)
         spl_text = f"{self._spl:.1f}"
         spl_surf = self._font_value_only.render(spl_text, True, color)
-        spl_rect = spl_surf.get_rect(centerx=SCREEN_WIDTH // 2, centery=cy - 40)
-        surface.blit(spl_surf, spl_rect)
 
-        # dB(A) label
-        label = self._font_medium.render("dB(A)", True, COLOR_LABEL_DIM)
-        surface.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, top=spl_rect.bottom + 2))
-
-        # Pitch value below
+        # Pre-render pitch surface to measure total height
         if self._pitch is not None:
             note_name, octave, cents = freq_to_note(self._pitch)
             note_text = f"{note_name}{octave}"
@@ -332,18 +329,34 @@ class MeterScreen(Screen):
             else:
                 cents_color = COLOR_RED
             cents_surf = self._font_large.render(cents_text, True, cents_color)
-            # Position as a group
+            pitch_height = note_surf.get_height()
+        else:
+            note_surf = None
+            cents_surf = None
+            cents_color = None
+            dash_surf = self._font_value_only.render("---", True, COLOR_LABEL_DIM)
+            pitch_height = dash_surf.get_height()
+
+        # Calculate total content height and center vertically
+        gap = 20  # vertical gap between SPL and pitch
+        total_height = spl_surf.get_height() + gap + pitch_height
+        content_top = available_top + (available_bottom - available_top - total_height) // 2
+
+        # Draw SPL value
+        spl_rect = spl_surf.get_rect(centerx=SCREEN_WIDTH // 2, top=content_top)
+        surface.blit(spl_surf, spl_rect)
+
+        # Draw pitch value below
+        pitch_y = spl_rect.bottom + gap
+        if note_surf is not None:
             total_w = note_surf.get_width() + 10 + cents_surf.get_width()
-            note_rect = note_surf.get_rect(centery=cy + spl_rect.height // 2 + 60)
+            note_rect = note_surf.get_rect(top=pitch_y)
             note_rect.left = (SCREEN_WIDTH - total_w) // 2
             surface.blit(note_surf, note_rect)
             cents_rect = cents_surf.get_rect(left=note_rect.right + 10, top=note_rect.top + 10)
             surface.blit(cents_surf, cents_rect)
         else:
-            dash_surf = self._font_value_only.render("---", True, COLOR_LABEL_DIM)
-            dash_rect = dash_surf.get_rect(
-                centerx=SCREEN_WIDTH // 2, centery=cy + spl_rect.height // 2 + 60
-            )
+            dash_rect = dash_surf.get_rect(centerx=SCREEN_WIDTH // 2, top=pitch_y)
             surface.blit(dash_surf, dash_rect)
 
     def _draw_readout(self, surface: pygame.Surface) -> None:
