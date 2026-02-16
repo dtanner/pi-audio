@@ -33,7 +33,7 @@ from pi_audio.spectrogram import SpectrogramRenderer
 
 class MeterScreen(Screen):
     # Layout
-    READOUT_HEIGHT = 90
+    READOUT_HEIGHT = 110
     CHART_LEFT_SPL = 80  # left margin when SPL y-axis labels are needed
     CHART_LEFT_SPEC = 50  # left margin for spectrogram freq labels
     CHART_LEFT_PITCH = 50  # left margin for pitch note labels
@@ -106,8 +106,8 @@ class MeterScreen(Screen):
             self._font_small = pygame.font.SysFont("monospace", 18)
             self._font_icon = pygame.font.SysFont("monospace", 20)
             self._font_value_only = pygame.font.SysFont("monospace", 260, bold=True)
-            self._font_pitch_large = pygame.font.SysFont("monospace", 56, bold=True)
-            self._font_pitch_cents = pygame.font.SysFont("monospace", 28)
+            self._font_pitch_large = pygame.font.SysFont("monospace", 120, bold=True)
+            self._font_pitch_cents = pygame.font.SysFont("monospace", 32)
             # Load toggle button icons
             assets = Path(__file__).resolve().parent.parent / "assets"
             sz = self.TOGGLE_SIZE - 4  # leave room for border
@@ -183,10 +183,11 @@ class MeterScreen(Screen):
         panels = self.settings.active_panels
         if len(panels) > 0:
             self._draw_readout(surface)
-        self._draw_chart(surface)
-        self._draw_toggle_buttons(surface)
-        if len(panels) > 0:
+            self._draw_chart(surface)
             self._draw_pause_button(surface)
+        else:
+            self._draw_value_only(surface)
+        self._draw_toggle_buttons(surface)
         self._draw_menu(surface)
         if self._help_open:
             self._draw_help_modal(surface)
@@ -262,12 +263,10 @@ class MeterScreen(Screen):
             pygame.draw.rect(surface, border_color, rect, 2, border_radius=4)
 
     def _draw_pause_button(self, surface: pygame.Surface) -> None:
-        """Draw pause/play button between the readout and the hamburger menu."""
+        """Draw pause/play button near the upper-right, left of the hamburger menu."""
         sz = self.PAUSE_SIZE
-        # Center horizontally between the right edge of the readout and the hamburger menu
-        readout_right = SCREEN_WIDTH * 3 // 4 + 60
         menu_left = SCREEN_WIDTH - self.MENU_ICON_SIZE - self.MENU_ICON_MARGIN
-        bx = (readout_right + menu_left) // 2 - sz // 2
+        bx = menu_left - sz - 12
         by = (self.READOUT_HEIGHT - sz) // 2
         self._pause_btn_rect = pygame.Rect(bx, by, sz, sz)
 
@@ -306,90 +305,132 @@ class MeterScreen(Screen):
             )
 
     def _draw_value_only(self, surface: pygame.Surface) -> None:
-        """Draw the SPL value as a large centered number."""
+        """Draw the SPL and pitch as large centered values when no panels are active."""
+        cy = SCREEN_HEIGHT // 2
+
+        # SPL value (large, left-center)
         color = self._spl_color(self._spl)
-        text = f"{self._spl:.1f}"
-        rendered = self._font_value_only.render(text, True, color)
-        rect = rendered.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10))
-        surface.blit(rendered, rect)
+        spl_text = f"{self._spl:.1f}"
+        spl_surf = self._font_value_only.render(spl_text, True, color)
+        spl_rect = spl_surf.get_rect(centerx=SCREEN_WIDTH // 2, centery=cy - 40)
+        surface.blit(spl_surf, spl_rect)
 
-        # Small "dB(A)" label below
-        label = self._font_medium.render("dB(A)", True, COLOR_TEXT)
-        label_rect = label.get_rect(centerx=SCREEN_WIDTH // 2, top=rect.bottom + 5)
-        surface.blit(label, label_rect)
+        # dB(A) label
+        label = self._font_medium.render("dB(A)", True, COLOR_LABEL_DIM)
+        surface.blit(label, label.get_rect(centerx=SCREEN_WIDTH // 2, top=spl_rect.bottom + 2))
 
-    def _draw_readout(self, surface: pygame.Surface) -> None:
-        panels = self.settings.active_panels
-        has_pitch_panel = "pitch" in panels
-
-        # SPL value on the left side
-        color = self._spl_color(self._spl)
-        text = f"{self._spl:5.1f}"
-        rendered = self._font_large.render(text, True, color)
-
-        if has_pitch_panel:
-            # SPL on left, pitch on right
-            spl_rect = rendered.get_rect(
-                centerx=SCREEN_WIDTH // 4, centery=self.READOUT_HEIGHT // 2 + 2
-            )
-        else:
-            # SPL centered (original behavior)
-            spl_rect = rendered.get_rect(
-                centerx=SCREEN_WIDTH // 2, centery=self.READOUT_HEIGHT // 2 + 2
-            )
-        surface.blit(rendered, spl_rect)
-
-        # Always show pitch info in the readout when pitch panel is active
-        if has_pitch_panel:
-            self._draw_pitch_readout(surface)
-
-    def _draw_pitch_readout(self, surface: pygame.Surface) -> None:
-        """Draw pitch note name + cents deviation on the right side of the readout."""
-        cx = SCREEN_WIDTH * 3 // 4
-        cy = self.READOUT_HEIGHT // 2
-
+        # Pitch value below
         if self._pitch is not None:
             note_name, octave, cents = freq_to_note(self._pitch)
-            # Note name + octave (large)
             note_text = f"{note_name}{octave}"
-            note_surf = self._font_pitch_large.render(note_text, True, COLOR_PITCH)
-            note_rect = note_surf.get_rect(centerx=cx - 30, centery=cy)
-            surface.blit(note_surf, note_rect)
-
-            # Cents deviation (smaller, to the right)
-            if cents >= 0:
-                cents_text = f"+{cents}"
-            else:
-                cents_text = f"{cents}"
+            note_surf = self._font_value_only.render(note_text, True, COLOR_PITCH)
+            cents_text = f"+{cents}" if cents >= 0 else f"{cents}"
             if abs(cents) <= 10:
                 cents_color = COLOR_GREEN
             elif abs(cents) <= 25:
                 cents_color = COLOR_YELLOW
             else:
                 cents_color = COLOR_RED
-            cents_surf = self._font_pitch_cents.render(cents_text, True, cents_color)
-            cents_rect = cents_surf.get_rect(left=note_rect.right + 8, centery=cy)
+            cents_surf = self._font_large.render(cents_text, True, cents_color)
+            # Position as a group
+            total_w = note_surf.get_width() + 10 + cents_surf.get_width()
+            note_rect = note_surf.get_rect(centery=cy + spl_rect.height // 2 + 60)
+            note_rect.left = (SCREEN_WIDTH - total_w) // 2
+            surface.blit(note_surf, note_rect)
+            cents_rect = cents_surf.get_rect(left=note_rect.right + 10, top=note_rect.top + 10)
             surface.blit(cents_surf, cents_rect)
+        else:
+            dash_surf = self._font_value_only.render("---", True, COLOR_LABEL_DIM)
+            dash_rect = dash_surf.get_rect(
+                centerx=SCREEN_WIDTH // 2, centery=cy + spl_rect.height // 2 + 60
+            )
+            surface.blit(dash_surf, dash_rect)
 
-            # Frequency in small text below
-            freq_text = f"{self._pitch:.1f} Hz"
-            freq_surf = self._font_small.render(freq_text, True, COLOR_LABEL_DIM)
-            freq_rect = freq_surf.get_rect(centerx=cx, top=note_rect.bottom + 2)
-            surface.blit(freq_surf, freq_rect)
+    def _draw_readout(self, surface: pygame.Surface) -> None:
+        cy = self.READOUT_HEIGHT // 2 + 8  # extra top padding
+
+        # Compute usable horizontal zone between toggle buttons and pause/menu
+        num_toggles = len(self._PANEL_NAMES)
+        zone_left = (
+            self.TOGGLE_MARGIN + num_toggles * self.TOGGLE_SIZE
+            + (num_toggles - 1) * self.TOGGLE_GAP + 10
+        )
+        menu_left = SCREEN_WIDTH - self.MENU_ICON_SIZE - self.MENU_ICON_MARGIN
+        pause_left = menu_left - self.PAUSE_SIZE - 12
+        zone_right = pause_left - 10
+
+        # Render SPL text
+        color = self._spl_color(self._spl)
+        text = f"{self._spl:5.1f}"
+        spl_surf = self._font_large.render(text, True, color)
+
+        # Render pitch text to measure its width
+        pitch_surf, cents_surf, cents_color = self._render_pitch_surfaces()
+        pitch_w = 0
+        if pitch_surf is not None:
+            pitch_w = pitch_surf.get_width() + 4 + (cents_surf.get_width() if cents_surf else 0)
+        else:
+            pitch_w = self._font_pitch_large.render("---", True, COLOR_LABEL_DIM).get_width()
+
+        # Position both with a minimum gap, centered in the zone as a group
+        gap = 30
+        total_w = spl_surf.get_width() + gap + pitch_w
+        zone_cx = (zone_left + zone_right) // 2
+        group_left = zone_cx - total_w // 2
+
+        # Draw SPL
+        spl_rect = spl_surf.get_rect(left=group_left, centery=cy)
+        surface.blit(spl_surf, spl_rect)
+
+        # Draw pitch
+        pitch_left = spl_rect.right + gap
+        self._draw_pitch_readout(surface, cy, pitch_left, pitch_surf, cents_surf, cents_color)
+
+    def _render_pitch_surfaces(
+        self,
+    ) -> tuple[pygame.Surface | None, pygame.Surface | None, tuple | None]:
+        """Pre-render pitch note and cents surfaces for measurement."""
+        if self._pitch is None:
+            return None, None, None
+        note_name, octave, cents = freq_to_note(self._pitch)
+        note_text = f"{note_name}{octave}"
+        note_surf = self._font_pitch_large.render(note_text, True, COLOR_PITCH)
+        cents_text = f"+{cents}" if cents >= 0 else f"{cents}"
+        if abs(cents) <= 10:
+            cents_color = COLOR_GREEN
+        elif abs(cents) <= 25:
+            cents_color = COLOR_YELLOW
+        else:
+            cents_color = COLOR_RED
+        cents_surf = self._font_pitch_cents.render(cents_text, True, cents_color)
+        return note_surf, cents_surf, cents_color
+
+    def _draw_pitch_readout(
+        self,
+        surface: pygame.Surface,
+        cy: int,
+        left: int,
+        note_surf: pygame.Surface | None,
+        cents_surf: pygame.Surface | None,
+        cents_color: tuple | None,
+    ) -> None:
+        """Draw pitch note name + cents deviation starting at the given left position."""
+
+        if note_surf is not None:
+            note_rect = note_surf.get_rect(left=left, centery=cy)
+            surface.blit(note_surf, note_rect)
+            cents_rect = cents_surf.get_rect(left=note_rect.right + 4, top=note_rect.top + 8)
+            surface.blit(cents_surf, cents_rect)
         else:
             # No pitch detected
             dash_surf = self._font_pitch_large.render("---", True, COLOR_LABEL_DIM)
-            dash_rect = dash_surf.get_rect(centerx=cx, centery=cy)
+            dash_rect = dash_surf.get_rect(left=left, centery=cy)
             surface.blit(dash_surf, dash_rect)
 
     def _draw_chart(self, surface: pygame.Surface) -> None:
         chart_top = self.READOUT_HEIGHT + 5
         panels = self.settings.active_panels
         num_panels = len(panels)
-
-        if num_panels == 0:
-            self._draw_value_only(surface)
-            return
 
         if num_panels == 1:
             # Single panel: full width
