@@ -118,7 +118,7 @@ class SpectrogramRenderer:
         pixel_surf = pygame.surfarray.make_surface(pixels.transpose(1, 0, 2))
         surface.blit(pixel_surf, (rect.x, rect.y))
 
-        # Frequency axis labels at octave-ish intervals
+        # Frequency axis labels to the left of the spectrogram
         label_freqs = [100, 200, 500, 1000, 2000, 4000, 8000]
         log_min = np.log10(self._freq_min)
         log_max = np.log10(self._freq_max)
@@ -132,15 +132,10 @@ class SpectrogramRenderer:
             else:
                 text = str(freq)
             label = self._font.render(text, True, (180, 180, 200))
-            lx = rect.x + 4
+            lx = rect.x - label.get_width() - 6
             ly = y - label.get_height() // 2
             # Clamp to rect bounds
             ly = max(rect.y, min(rect.y + rect.height - label.get_height(), ly))
-            # Dark background so label is readable over spectrogram data
-            bg_rect = pygame.Rect(lx - 2, ly - 1, label.get_width() + 4, label.get_height() + 2)
-            bg_surf = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
-            bg_surf.fill((0, 0, 0, 180))
-            surface.blit(bg_surf, bg_rect.topleft)
             surface.blit(label, (lx, ly))
-            # Tick mark
+            # Tick mark on left edge of spectrogram
             pygame.draw.line(surface, (80, 80, 100), (rect.x, y), (rect.x + 3, y))
