@@ -2,13 +2,16 @@
 
 Real-time sound level meter and spectrogram display for Raspberry Pi with A-weighted SPL measurement, rolling history, and FFT-based overtone analysis.
 
+![pi-audio screenshot](docs/screenshot.png)
+
 ## Features
 
 - **Live SPL(A) Measurement** - Real-time A-weighted sound pressure level in dB
 - **Rolling History Chart** - Configurable visual history of sound levels (5s to 5min)
-- **Spectrogram / Overtone Analyzer** - Scrolling frequency display with logarithmic Y-axis (50 Hz–8 kHz)
-- **Three Display Modes** - Meter only, Overtones only, or Both side-by-side (configurable in settings)
-- **Persistent Settings** - History length, color thresholds, and display mode saved across sessions
+- **Spectrogram / Overtone Analyzer** - Scrolling frequency display with logarithmic Y-axis and configurable frequency range (40 Hz–8 kHz)
+- **Four Display Modes** - Meter only, Overtones only, Both side-by-side, or Current value only
+- **In-App Help** - Built-in help overlay accessible from the menu
+- **Persistent Settings** - History length, color thresholds, frequency range, and display mode saved across sessions
 - **Hardware Flexibility** - Designed to work with various Pi models, displays, and USB microphones
 
 ## Quick Start
@@ -81,7 +84,7 @@ Default values: `PI_HOST=admin@piaudio.local`, `PI_PATH=~/pi-audio`
 - `src/pi_audio/spectrogram.py` - Spectrogram renderer (log-frequency mapping, color LUT)
 - `src/pi_audio/settings.py` - Persistent user settings
 - `src/pi_audio/main.py` - pygame initialization and main loop
-- `src/pi_audio/screens/` - Screen implementations (meter, spectrogram, settings)
+- `src/pi_audio/screens/` - Screen implementations (meter, settings)
 
 ## How It Works
 
@@ -100,4 +103,4 @@ Contributions welcome! Especially:
 
 ## License
 
-See [LICENSE](LICENSE) file for details. 
+See [LICENSE](LICENSE) file for details.
