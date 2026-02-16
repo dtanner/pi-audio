@@ -11,6 +11,7 @@ from pi_audio.config import (
     COLOR_CHART_BG,
     COLOR_GREEN,
     COLOR_GRID,
+    COLOR_LABEL_DIM,
     COLOR_RED,
     COLOR_SLIDER_FILL,
     COLOR_TEXT,
@@ -70,8 +71,11 @@ class MeterScreen(Screen):
         self._menu_icon_rect: pygame.Rect | None = None
         self._menu_open: bool = False
         self._menu_settings_rect: pygame.Rect | None = None
+        self._menu_help_rect: pygame.Rect | None = None
         self._menu_exit_rect: pygame.Rect | None = None
         self._hovered_menu_item: str | None = None
+        self._help_open: bool = False
+        self._help_close_rect: pygame.Rect | None = None
 
     def _ensure_fonts(self) -> None:
         if self._font_large is None:
@@ -107,13 +111,21 @@ class MeterScreen(Screen):
             if self._menu_open:
                 if self._menu_settings_rect and self._menu_settings_rect.collidepoint(event.pos):
                     self._hovered_menu_item = "settings"
+                elif self._menu_help_rect and self._menu_help_rect.collidepoint(event.pos):
+                    self._hovered_menu_item = "help"
                 elif self._menu_exit_rect and self._menu_exit_rect.collidepoint(event.pos):
                     self._hovered_menu_item = "exit"
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._help_open:
+                self._help_open = False
+                return
             if self._menu_open:
                 if self._menu_settings_rect and self._menu_settings_rect.collidepoint(event.pos):
                     self._menu_open = False
                     self.on_settings()
+                elif self._menu_help_rect and self._menu_help_rect.collidepoint(event.pos):
+                    self._menu_open = False
+                    self._help_open = True
                 elif self._menu_exit_rect and self._menu_exit_rect.collidepoint(event.pos):
                     raise SystemExit
                 else:
@@ -136,6 +148,8 @@ class MeterScreen(Screen):
         self._draw_chart(surface)
         self._draw_toggle_buttons(surface)
         self._draw_menu(surface)
+        if self._help_open:
+            self._draw_help_modal(surface)
 
     def _spl_color(self, db: float) -> tuple[int, int, int]:
         """Determine color based on SPL level and current thresholds."""
@@ -352,9 +366,12 @@ class MeterScreen(Screen):
         if self._menu_open:
             dx = SCREEN_WIDTH - self.MENU_DROPDOWN_WIDTH - self.MENU_ICON_MARGIN
             dy = iy + self.MENU_ICON_SIZE + 4
+            num_items = 3
 
             # Dropdown background
-            dropdown_rect = pygame.Rect(dx, dy, self.MENU_DROPDOWN_WIDTH, self.MENU_ITEM_HEIGHT * 2)
+            dropdown_rect = pygame.Rect(
+                dx, dy, self.MENU_DROPDOWN_WIDTH, self.MENU_ITEM_HEIGHT * num_items
+            )
             pygame.draw.rect(surface, (50, 50, 65), dropdown_rect)
             pygame.draw.rect(surface, (80, 80, 100), dropdown_rect, 1)
 
@@ -378,8 +395,29 @@ class MeterScreen(Screen):
                 (dx + self.MENU_DROPDOWN_WIDTH - 8, dy + self.MENU_ITEM_HEIGHT),
             )
 
+            # Help item
+            hy = dy + self.MENU_ITEM_HEIGHT
+            self._menu_help_rect = pygame.Rect(
+                dx, hy, self.MENU_DROPDOWN_WIDTH, self.MENU_ITEM_HEIGHT
+            )
+            if self._hovered_menu_item == "help":
+                pygame.draw.rect(surface, COLOR_BUTTON_HOVER, self._menu_help_rect)
+            help_text = self._font_icon.render("Help", True, COLOR_TEXT)
+            surface.blit(
+                help_text,
+                help_text.get_rect(midleft=(dx + 12, hy + self.MENU_ITEM_HEIGHT // 2)),
+            )
+
+            # Divider
+            pygame.draw.line(
+                surface,
+                (80, 80, 100),
+                (dx + 8, hy + self.MENU_ITEM_HEIGHT),
+                (dx + self.MENU_DROPDOWN_WIDTH - 8, hy + self.MENU_ITEM_HEIGHT),
+            )
+
             # Exit item
-            ey = dy + self.MENU_ITEM_HEIGHT
+            ey = hy + self.MENU_ITEM_HEIGHT
             self._menu_exit_rect = pygame.Rect(
                 dx, ey, self.MENU_DROPDOWN_WIDTH, self.MENU_ITEM_HEIGHT
             )
@@ -390,3 +428,78 @@ class MeterScreen(Screen):
                 exit_text,
                 exit_text.get_rect(midleft=(dx + 12, ey + self.MENU_ITEM_HEIGHT // 2)),
             )
+
+    def _draw_help_modal(self, surface: pygame.Surface) -> None:
+        # Semi-transparent overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        surface.blit(overlay, (0, 0))
+
+        # Modal box
+        modal_w, modal_h = 700, 420
+        mx = (SCREEN_WIDTH - modal_w) // 2
+        my = (SCREEN_HEIGHT - modal_h) // 2
+        modal_rect = pygame.Rect(mx, my, modal_w, modal_h)
+        pygame.draw.rect(surface, (30, 30, 45), modal_rect, border_radius=8)
+        pygame.draw.rect(surface, (80, 80, 100), modal_rect, 2, border_radius=8)
+
+        font_title = pygame.font.SysFont("monospace", 28, bold=True)
+        font_body = pygame.font.SysFont("monospace", 16)
+        font_heading = pygame.font.SysFont("monospace", 18, bold=True)
+        font_hint = pygame.font.SysFont("monospace", 14)
+
+        pad = 24
+        y = my + pad
+
+        # Title
+        title = font_title.render("pi-audio", True, COLOR_TEXT)
+        surface.blit(title, (mx + pad, y))
+        y += title.get_height() + 6
+
+        desc = font_body.render(
+            "A real-time sound level display for Raspberry Pi.", True, COLOR_LABEL_DIM
+        )
+        surface.blit(desc, (mx + pad, y))
+        y += desc.get_height() + 16
+
+        # Help content
+        sections = [
+            (
+                "Spectrogram (Overtones)",
+                [
+                    "Shows a scrolling view of sound frequencies over",
+                    "time using FFT analysis. Low frequencies at the",
+                    "bottom, high at the top. Brighter colors = louder.",
+                ],
+            ),
+            (
+                "Level History (Meter)",
+                [
+                    "A rolling chart of the A-weighted sound pressure",
+                    "level (dB) over time. Color indicates level:",
+                    "green = safe, yellow = caution, red = loud.",
+                ],
+            ),
+            (
+                "Display Modes",
+                [
+                    "Use the toggle buttons (top-left) to show the",
+                    "spectrogram, level history, both side-by-side,",
+                    "or just the current dB value.",
+                ],
+            ),
+        ]
+
+        for heading, lines in sections:
+            h = font_heading.render(heading, True, COLOR_SLIDER_FILL)
+            surface.blit(h, (mx + pad, y))
+            y += h.get_height() + 4
+            for line in lines:
+                t = font_body.render(line, True, COLOR_TEXT)
+                surface.blit(t, (mx + pad + 12, y))
+                y += t.get_height() + 2
+            y += 8
+
+        # Close hint
+        hint = font_hint.render("Tap anywhere to close", True, COLOR_LABEL_DIM)
+        surface.blit(hint, hint.get_rect(centerx=SCREEN_WIDTH // 2, bottom=my + modal_h - 14))
