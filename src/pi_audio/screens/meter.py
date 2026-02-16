@@ -349,11 +349,17 @@ class MeterScreen(Screen):
         # Draw pitch value below
         pitch_y = spl_rect.bottom + gap
         if note_surf is not None:
-            total_w = note_surf.get_width() + 10 + cents_surf.get_width()
-            note_rect = note_surf.get_rect(top=pitch_y)
-            note_rect.left = (SCREEN_WIDTH - total_w) // 2
+            gap = 10
+            # Use fixed-width measurements so position doesn't shift
+            note_max_w = self._font_value_only.size("G#8")[0]
+            cents_max_w = self._font_large.size("+50")[0]
+            total_w = note_max_w + gap + cents_max_w
+            # Right-align note within its fixed region
+            note_region_right = (SCREEN_WIDTH - total_w) // 2 + note_max_w
+            note_rect = note_surf.get_rect(right=note_region_right, top=pitch_y)
             surface.blit(note_surf, note_rect)
-            cents_rect = cents_surf.get_rect(left=note_rect.right + 10, top=note_rect.top + 10)
+            # Left-align cents after the fixed note region
+            cents_rect = cents_surf.get_rect(left=note_region_right + gap, top=note_rect.top + 10)
             surface.blit(cents_surf, cents_rect)
         else:
             dash_rect = dash_surf.get_rect(centerx=SCREEN_WIDTH // 2, top=pitch_y)
@@ -365,8 +371,10 @@ class MeterScreen(Screen):
         # Compute usable horizontal zone between toggle buttons and pause/menu
         num_toggles = len(self._PANEL_NAMES)
         zone_left = (
-            self.TOGGLE_MARGIN + num_toggles * self.TOGGLE_SIZE
-            + (num_toggles - 1) * self.TOGGLE_GAP + 10
+            self.TOGGLE_MARGIN
+            + num_toggles * self.TOGGLE_SIZE
+            + (num_toggles - 1) * self.TOGGLE_GAP
+            + 10
         )
         menu_left = SCREEN_WIDTH - self.MENU_ICON_SIZE - self.MENU_ICON_MARGIN
         pause_left = menu_left - self.PAUSE_SIZE - 12
@@ -423,11 +431,17 @@ class MeterScreen(Screen):
 
         if note_surf is not None:
             gap = 4
-            total_w = note_surf.get_width() + gap + cents_surf.get_width()
+            # Use fixed-width measurements so position doesn't shift
+            note_max_w = self._font_pitch_large.size("G#8")[0]
+            cents_max_w = self._font_pitch_cents.size("+50")[0]
+            total_w = note_max_w + gap + cents_max_w
             left = centerx - total_w // 2
-            note_rect = note_surf.get_rect(left=left, centery=cy)
+            # Right-align note within its fixed region
+            note_region_right = left + note_max_w
+            note_rect = note_surf.get_rect(right=note_region_right, centery=cy)
             surface.blit(note_surf, note_rect)
-            cents_rect = cents_surf.get_rect(left=note_rect.right + gap, top=note_rect.top + 8)
+            # Left-align cents after the fixed note region
+            cents_rect = cents_surf.get_rect(left=note_region_right + gap, top=note_rect.top + 8)
             surface.blit(cents_surf, cents_rect)
         else:
             # No pitch detected
