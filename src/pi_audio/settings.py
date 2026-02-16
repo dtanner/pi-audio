@@ -3,7 +3,14 @@ from pathlib import Path
 
 _SETTINGS_PATH = Path.home() / ".config" / "pi-audio" / "settings.json"
 
-_KEYS = ("history_seconds", "quiet_threshold", "moderate_threshold", "display_mode")
+_KEYS = (
+    "history_seconds",
+    "quiet_threshold",
+    "moderate_threshold",
+    "display_mode",
+    "overtone_freq_min",
+    "overtone_freq_max",
+)
 
 
 class Settings:
@@ -19,6 +26,10 @@ class Settings:
 
         # Display mode: "meter", "overtones", or "both"
         self.display_mode: str = "both"
+
+        # Overtone frequency range in Hz (allowed: 40–8000)
+        self.overtone_freq_min: int = 100
+        self.overtone_freq_max: int = 4000
 
         self._load()
 
@@ -44,6 +55,10 @@ class Settings:
         # Display mode
         if self.display_mode not in ("meter", "overtones", "both"):
             self.display_mode = "both"
+
+        # Overtone frequency range: 40–8000 Hz, min < max
+        self.overtone_freq_min = max(40, min(7999, self.overtone_freq_min))
+        self.overtone_freq_max = max(self.overtone_freq_min + 1, min(8000, self.overtone_freq_max))
 
     def save(self) -> None:
         """Persist current settings to disk."""

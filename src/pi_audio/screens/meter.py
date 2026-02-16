@@ -43,7 +43,12 @@ class MeterScreen(Screen):
         self._spl: float = 0.0
         self._history: list[float] = []
         self._spectrogram: list[np.ndarray] = []
-        self._spec_renderer = SpectrogramRenderer(SAMPLE_RATE, BLOCK_SIZE)
+        self._spec_renderer = SpectrogramRenderer(
+            SAMPLE_RATE,
+            BLOCK_SIZE,
+            freq_min=settings.overtone_freq_min,
+            freq_max=settings.overtone_freq_max,
+        )
         self._font_large: pygame.font.Font | None = None
         self._font_medium: pygame.font.Font | None = None
         self._font_small: pygame.font.Font | None = None
@@ -154,6 +159,10 @@ class MeterScreen(Screen):
     def _draw_spectrogram(
         self, surface: pygame.Surface, left: int, top: int, width: int, height: int
     ) -> None:
+        # Sync freq range from settings
+        self._spec_renderer.set_freq_range(
+            self.settings.overtone_freq_min, self.settings.overtone_freq_max
+        )
         # Background
         pygame.draw.rect(surface, COLOR_CHART_BG, (left, top, width, height))
         rect = pygame.Rect(left, top, width, height)

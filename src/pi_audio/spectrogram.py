@@ -44,6 +44,8 @@ class SpectrogramRenderer:
 
         # We'll lazily build the row→bin mapping when we know the display height
         self._cached_height: int = 0
+        self._cached_freq_min: float = 0.0
+        self._cached_freq_max: float = 0.0
         self._row_bin_indices: np.ndarray = np.array([])
 
         self._font: pygame.font.Font | None = None
@@ -52,11 +54,22 @@ class SpectrogramRenderer:
         if self._font is None:
             self._font = pygame.font.SysFont("monospace", 14)
 
+    def set_freq_range(self, freq_min: float, freq_max: float) -> None:
+        """Update the displayed frequency range."""
+        self._freq_min = freq_min
+        self._freq_max = freq_max
+
     def _build_row_mapping(self, height: int) -> None:
         """Map each display row to an FFT bin index using logarithmic frequency scale."""
-        if height == self._cached_height:
+        if (
+            height == self._cached_height
+            and self._freq_min == self._cached_freq_min
+            and self._freq_max == self._cached_freq_max
+        ):
             return
         self._cached_height = height
+        self._cached_freq_min = self._freq_min
+        self._cached_freq_max = self._freq_max
 
         log_min = np.log10(self._freq_min)
         log_max = np.log10(self._freq_max)
