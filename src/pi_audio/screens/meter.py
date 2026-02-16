@@ -361,30 +361,22 @@ class MeterScreen(Screen):
 
         # Render SPL text
         color = self._spl_color(self._spl)
-        text = f"{self._spl:5.1f}"
+        text = f"{self._spl:3.0f}"
         spl_surf = self._font_large.render(text, True, color)
 
-        # Render pitch text to measure its width
+        # Render pitch surfaces
         pitch_surf, cents_surf, cents_color = self._render_pitch_surfaces()
-        pitch_w = 0
-        if pitch_surf is not None:
-            pitch_w = pitch_surf.get_width() + 4 + (cents_surf.get_width() if cents_surf else 0)
-        else:
-            pitch_w = self._font_pitch_large.render("---", True, COLOR_LABEL_DIM).get_width()
 
-        # Position both with a minimum gap, centered in the zone as a group
-        gap = 30
-        total_w = spl_surf.get_width() + gap + pitch_w
+        # Position SPL and pitch in independent halves of the zone so they don't shift each other
         zone_cx = (zone_left + zone_right) // 2
-        group_left = zone_cx - total_w // 2
 
-        # Draw SPL
-        spl_rect = spl_surf.get_rect(left=group_left, centery=cy)
+        # Draw SPL centered in the left half
+        spl_rect = spl_surf.get_rect(centerx=(zone_left + zone_cx) // 2, centery=cy)
         surface.blit(spl_surf, spl_rect)
 
-        # Draw pitch
-        pitch_left = spl_rect.right + gap
-        self._draw_pitch_readout(surface, cy, pitch_left, pitch_surf, cents_surf, cents_color)
+        # Draw pitch centered in the right half
+        pitch_cx = (zone_cx + zone_right) // 2
+        self._draw_pitch_readout(surface, cy, pitch_cx, pitch_surf, cents_surf, cents_color)
 
     def _render_pitch_surfaces(
         self,
@@ -409,22 +401,25 @@ class MeterScreen(Screen):
         self,
         surface: pygame.Surface,
         cy: int,
-        left: int,
+        centerx: int,
         note_surf: pygame.Surface | None,
         cents_surf: pygame.Surface | None,
         cents_color: tuple | None,
     ) -> None:
-        """Draw pitch note name + cents deviation starting at the given left position."""
+        """Draw pitch note name + cents deviation centered on the given x coordinate."""
 
         if note_surf is not None:
+            gap = 4
+            total_w = note_surf.get_width() + gap + cents_surf.get_width()
+            left = centerx - total_w // 2
             note_rect = note_surf.get_rect(left=left, centery=cy)
             surface.blit(note_surf, note_rect)
-            cents_rect = cents_surf.get_rect(left=note_rect.right + 4, top=note_rect.top + 8)
+            cents_rect = cents_surf.get_rect(left=note_rect.right + gap, top=note_rect.top + 8)
             surface.blit(cents_surf, cents_rect)
         else:
             # No pitch detected
             dash_surf = self._font_pitch_large.render("---", True, COLOR_LABEL_DIM)
-            dash_rect = dash_surf.get_rect(left=left, centery=cy)
+            dash_rect = dash_surf.get_rect(centerx=centerx, centery=cy)
             surface.blit(dash_surf, dash_rect)
 
     def _draw_chart(self, surface: pygame.Surface) -> None:
