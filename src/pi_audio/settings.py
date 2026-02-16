@@ -10,6 +10,9 @@ _KEYS = (
     "active_panels",
     "overtone_freq_min",
     "overtone_freq_max",
+    "pitch_note_min",
+    "pitch_note_max",
+    "pitch_range_auto",
 )
 
 _VALID_PANELS = ("overtones", "meter", "pitch")
@@ -32,6 +35,14 @@ class Settings:
         # Overtone frequency range in Hz (allowed: 40–8000)
         self.overtone_freq_min: int = 100
         self.overtone_freq_max: int = 4000
+
+        # Pitch detection range as semitones from A4 (allowed: -39 to +39, i.e. C1 to D#8)
+        # Default: E2 (-29) to G5 (+10)
+        self.pitch_note_min: int = -29
+        self.pitch_note_max: int = 10
+
+        # Pitch chart range mode: True = auto-adjust to recent pitches, False = fixed to note range
+        self.pitch_range_auto: bool = True
 
         self._load()
 
@@ -85,6 +96,10 @@ class Settings:
         # Overtone frequency range: 40–8000 Hz, min < max
         self.overtone_freq_min = max(40, min(7999, self.overtone_freq_min))
         self.overtone_freq_max = max(self.overtone_freq_min + 1, min(8000, self.overtone_freq_max))
+
+        # Pitch note range: -39 to +39 semitones from A4, min < max
+        self.pitch_note_min = max(-39, min(38, self.pitch_note_min))
+        self.pitch_note_max = max(self.pitch_note_min + 1, min(39, self.pitch_note_max))
 
     def save(self) -> None:
         """Persist current settings to disk."""

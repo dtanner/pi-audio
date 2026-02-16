@@ -579,26 +579,30 @@ class MeterScreen(Screen):
         # Chart background
         pygame.draw.rect(surface, COLOR_CHART_BG, (left, top, width, height))
 
-        # Determine Y-axis range based on recent pitch data
+        # Determine Y-axis range
         valid_pitches = [p for p in self._pitch_history if p is not None]
 
-        if len(valid_pitches) < 2:
-            # Not enough data — draw empty chart
-            pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
-            no_data = self._font_small.render("Listening...", True, COLOR_LABEL_DIM)
-            surface.blit(
-                no_data,
-                no_data.get_rect(center=(left + width // 2, top + height // 2)),
-            )
-            return
+        if self.settings.pitch_range_auto:
+            # Auto mode: center on median pitch, show ~2 octaves
+            if len(valid_pitches) < 2:
+                pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
+                no_data = self._font_small.render("Listening...", True, COLOR_LABEL_DIM)
+                surface.blit(
+                    no_data,
+                    no_data.get_rect(center=(left + width // 2, top + height // 2)),
+                )
+                return
 
-        # Compute range: center on median pitch, show ~2 octaves
-        median_pitch = sorted(valid_pitches)[len(valid_pitches) // 2]
-        # Convert to semitones from A4 for easier math
-        median_semi = 12.0 * math.log2(median_pitch / 440.0) + 69  # MIDI note number
-        half_range = self.PITCH_OCTAVES_VISIBLE * 12 / 2  # semitones
-        semi_min = median_semi - half_range
-        semi_max = median_semi + half_range
+            median_pitch = sorted(valid_pitches)[len(valid_pitches) // 2]
+            median_semi = 12.0 * math.log2(median_pitch / 440.0) + 69  # MIDI note
+            half_range = self.PITCH_OCTAVES_VISIBLE * 12 / 2
+            semi_min = median_semi - half_range
+            semi_max = median_semi + half_range
+        else:
+            # Fixed mode: use configured note range (semitones from A4 -> MIDI)
+            semi_min = 69.0 + self.settings.pitch_note_min
+            semi_max = 69.0 + self.settings.pitch_note_max
+
         semi_range = semi_max - semi_min
 
         # Draw semitone grid lines with note labels
@@ -642,7 +646,7 @@ class MeterScreen(Screen):
             x = right - (n - 1 - i) / max(history_len - 1, 1) * width
             semi = 12.0 * math.log2(pitch / 440.0) + 69
             frac = (semi - semi_min) / semi_range
-            y = bottom - frac * height
+            y = max(top, min(bottom, bottom - frac * height))
 
             cur_point = (x, y)
             if prev_point is not None:

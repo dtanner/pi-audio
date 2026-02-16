@@ -25,10 +25,12 @@ def main() -> None:
     # Create settings and audio capture
     settings = Settings()
     audio = AudioCapture(history_length=settings.history_length)
+    audio.set_pitch_range(settings.pitch_note_min, settings.pitch_note_max)
     audio.start()
 
-    # Track previous history length to detect changes
+    # Track previous settings to detect changes
     prev_history_length = settings.history_length
+    prev_pitch_range = (settings.pitch_note_min, settings.pitch_note_max)
 
     # Screen management
     current_screen_name = "meter"
@@ -58,10 +60,14 @@ def main() -> None:
                     raise SystemExit
                 screen.handle_event(event)
 
-            # Update audio history length if settings changed
+            # Update audio settings if changed
             if settings.history_length != prev_history_length:
                 audio.set_history_length(settings.history_length)
                 prev_history_length = settings.history_length
+            pitch_range = (settings.pitch_note_min, settings.pitch_note_max)
+            if pitch_range != prev_pitch_range:
+                audio.set_pitch_range(*pitch_range)
+                prev_pitch_range = pitch_range
 
             # Only update audio data for meter screen
             if isinstance(screen, MeterScreen):

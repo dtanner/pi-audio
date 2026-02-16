@@ -134,14 +134,28 @@ def _parabolic_interpolation(d_prime: np.ndarray, tau: int) -> float:
     return tau + adjustment
 
 
+_NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
+
+def semitone_to_freq(semitone: int) -> float:
+    """Convert a semitone offset from A4 to a frequency in Hz."""
+    return 440.0 * (2.0 ** (semitone / 12.0))
+
+
+def note_name_from_semitone(semitone: int) -> str:
+    """Return a note name string like 'E2' or 'G5' for a semitone offset from A4."""
+    midi_note = 69 + semitone
+    note_index = midi_note % 12
+    octave = midi_note // 12 - 1
+    return f"{_NOTE_NAMES[note_index]}{octave}"
+
+
 def freq_to_note(freq_hz: float) -> tuple[str, int, int]:
     """Convert a frequency in Hz to the nearest musical note.
 
     Returns (note_name, octave, cents_offset) where cents_offset is in [-50, +49].
     For example: ("A", 4, -12) means 12 cents flat of A4.
     """
-    _NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
-
     # Semitones from A4 (440 Hz)
     semitones_from_a4 = 12.0 * math.log2(freq_hz / 440.0)
 

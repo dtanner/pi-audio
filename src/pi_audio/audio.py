@@ -7,7 +7,10 @@ from scipy.signal import sosfilt, zpk2sos
 from scipy.signal.windows import blackmanharris
 
 from pi_audio.config import BLOCK_SIZE, FFT_SIZE, SAMPLE_RATE
-from pi_audio.pitch import yin_pitch
+from pi_audio.pitch import semitone_to_freq, yin_pitch
+
+# Hard ceiling: never record pitches above C6 regardless of settings
+_MAX_PITCH_FREQ = semitone_to_freq(15)  # C6 ≈ 1046.5 Hz
 
 
 def _a_weighting_sos(fs: int) -> np.ndarray:
@@ -78,9 +81,16 @@ class AudioCapture:
         self._pitch_history: collections.deque[float | None] = collections.deque(
             maxlen=history_length
         )
+        self._pitch_freq_min: float = 30.0
+        self._pitch_freq_max: float = 5000.0
         self._window = blackmanharris(block_size)
         self._lock = threading.Lock()
         self._stream: sd.InputStream | None = None
+
+    def set_pitch_range(self, note_min: int, note_max: int) -> None:
+        """Update the pitch detection frequency range from semitone offsets."""
+        self._pitch_freq_min = semitone_to_freq(note_min)
+        self._pitch_freq_max = semitone_to_freq(note_max)
 
     def set_history_length(self, new_length: int) -> None:
         """Dynamically update the history buffer size."""
@@ -115,6 +125,11 @@ class AudioCapture:
 
         # Pitch detection on raw audio
         pitch = yin_pitch(audio, self.sample_rate)
+        # Hard cap: never record anything above C6 (~1046.5 Hz)
+        if pitch is not None and pitch > _MAX_PITCH_FREQ:
+            pitch = None
+        if pitch is not None and not (self._pitch_freq_min <= pitch <= self._pitch_freq_max):
+            pitch = None
 
         with self._lock:
             self._current_spl = db
