@@ -228,7 +228,7 @@ class MeterScreen(Screen):
         # Main number — positioned near the top
         text = f"{self._spl:5.1f}"
         rendered = self._font_large.render(text, True, color)
-        rect = rendered.get_rect(centerx=SCREEN_WIDTH // 2, centery=self.READOUT_HEIGHT // 2)
+        rect = rendered.get_rect(centerx=SCREEN_WIDTH // 2, centery=self.READOUT_HEIGHT // 2 + 2)
         surface.blit(rendered, rect)
 
     def _draw_chart(self, surface: pygame.Surface) -> None:
