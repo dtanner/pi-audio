@@ -48,8 +48,8 @@ _GENERAL_SLIDERS = [
     _SliderDef("history_seconds", "History Length", "s", 5, 300, 5),
 ]
 _LEVEL_SLIDERS = [
-    _SliderDef("quiet_threshold", "Safe Threshold", "dB", 20, 95, 1),
-    _SliderDef("moderate_threshold", "Caution Threshold", "dB", 21, 100, 1),
+    _SliderDef("quiet_threshold", "Safe Threshold", "dB", 40, 95, 1),
+    _SliderDef("moderate_threshold", "Caution Threshold", "dB", 60, 100, 1),
 ]
 
 # Overtone range slider constants (logarithmic)

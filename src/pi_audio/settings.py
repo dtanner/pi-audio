@@ -47,9 +47,9 @@ class Settings:
 
         # Thresholds: keep within reasonable SPL range (20-100 dB)
         # and ensure quiet < moderate
-        self.quiet_threshold = max(20.0, min(95.0, self.quiet_threshold))
+        self.quiet_threshold = max(40.0, min(95.0, self.quiet_threshold))
         self.moderate_threshold = max(
-            self.quiet_threshold + 1.0, min(100.0, self.moderate_threshold)
+            max(60.0, self.quiet_threshold + 1.0), min(100.0, self.moderate_threshold)
         )
 
         # Display mode
