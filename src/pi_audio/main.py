@@ -60,7 +60,7 @@ def main() -> None:
 
             # Only update audio data for meter screen
             if isinstance(screen, MeterScreen):
-                spec = audio.spectrogram if settings.display_mode != "meter" else None
+                spec = audio.spectrogram if settings.display_mode in ("both", "overtones") else None
                 screen.set_audio_data(audio.current_spl, audio.history, spec)
 
             screen.update(dt)

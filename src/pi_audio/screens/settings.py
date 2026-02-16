@@ -52,12 +52,6 @@ _LEVEL_SLIDERS = [
     _SliderDef("moderate_threshold", "Caution Threshold", "dB", 21, 100, 1),
 ]
 
-_DISPLAY_MODES = [
-    ("meter", "Meter"),
-    ("overtones", "Overtones"),
-    ("both", "Both"),
-]
-
 # Overtone range slider constants (logarithmic)
 _RANGE_FREQ_MIN = 40.0
 _RANGE_FREQ_MAX = 8000.0
@@ -99,9 +93,6 @@ class SettingsScreen(Screen):
     GROUP_GAP = 14
     BACK_BUTTON_WIDTH = 140
     BACK_BUTTON_HEIGHT = 44
-    MODE_BUTTON_WIDTH = 140
-    MODE_BUTTON_HEIGHT = 38
-    MODE_BUTTON_GAP = 10
 
     def __init__(self, settings: Settings, on_back: callable):
         self.settings = settings
@@ -113,11 +104,9 @@ class SettingsScreen(Screen):
         self._font_hint: pygame.font.Font | None = None
         self._dragging: str | None = None  # slider key or "range_min"/"range_max"
         self._hovered_slider: str | None = None
-        self._hovered_mode: str | None = None
         self._back_hovered: bool = False
         self._back_rect: pygame.Rect | None = None
         self._slider_rects: dict[str, pygame.Rect] = {}
-        self._mode_rects: dict[str, pygame.Rect] = {}
         self._range_hit_rect: pygame.Rect | None = None
 
     def _ensure_fonts(self) -> None:
@@ -199,11 +188,6 @@ class SettingsScreen(Screen):
                 else:
                     self._hovered_slider = "range_max"
 
-            self._hovered_mode = None
-            for mode_key, rect in self._mode_rects.items():
-                if rect.collidepoint(mx, my):
-                    self._hovered_mode = mode_key
-
             # Handle drag
             if self._dragging:
                 if self._dragging in ("range_min", "range_max"):
@@ -220,12 +204,6 @@ class SettingsScreen(Screen):
             if self._back_rect and self._back_rect.collidepoint(mx, my):
                 self.on_back()
                 return
-
-            for mode_key, rect in self._mode_rects.items():
-                if rect.collidepoint(mx, my):
-                    self.settings.display_mode = mode_key
-                    self.settings.save()
-                    return
 
             # Check range slider
             if self._range_hit_rect and self._range_hit_rect.collidepoint(mx, my):
@@ -264,7 +242,6 @@ class SettingsScreen(Screen):
         self._ensure_fonts()
         surface.fill(COLOR_BG)
         self._slider_rects.clear()
-        self._mode_rects.clear()
 
         sx = self._content_left
         y = 20
@@ -281,7 +258,6 @@ class SettingsScreen(Screen):
         y = self._draw_group_heading(surface, "General", y)
         for slider in _GENERAL_SLIDERS:
             y = self._draw_slider(surface, slider, y)
-        y = self._draw_mode_selector(surface, y)
         y += self.GROUP_GAP
         pygame.draw.line(surface, COLOR_DIVIDER, (sx, y), (sx + self.CONTENT_WIDTH, y))
         y += self.GROUP_GAP
@@ -422,35 +398,3 @@ class SettingsScreen(Screen):
         surface.blit(hi, (sx + self.CONTENT_WIDTH - hi.get_width(), hint_y))
 
         return y + self.SLIDER_ROW_HEIGHT
-
-    def _draw_mode_selector(self, surface: pygame.Surface, y: int) -> int:
-        label = self._font_label.render("Display Mode", True, COLOR_TEXT)
-        total_width = (
-            len(_DISPLAY_MODES) * self.MODE_BUTTON_WIDTH
-            + (len(_DISPLAY_MODES) - 1) * self.MODE_BUTTON_GAP
-        )
-        start_x = (SCREEN_WIDTH - total_width) // 2
-        surface.blit(label, (start_x, y))
-
-        btn_y = y + 28
-        for i, (mode_key, mode_label) in enumerate(_DISPLAY_MODES):
-            bx = start_x + i * (self.MODE_BUTTON_WIDTH + self.MODE_BUTTON_GAP)
-            rect = pygame.Rect(bx, btn_y, self.MODE_BUTTON_WIDTH, self.MODE_BUTTON_HEIGHT)
-            self._mode_rects[mode_key] = rect
-
-            is_selected = self.settings.display_mode == mode_key
-            is_hovered = self._hovered_mode == mode_key
-
-            if is_selected:
-                bg = COLOR_SLIDER_FILL
-            elif is_hovered:
-                bg = COLOR_BUTTON_HOVER
-            else:
-                bg = COLOR_BUTTON_BG
-
-            pygame.draw.rect(surface, bg, rect, border_radius=6)
-            pygame.draw.rect(surface, COLOR_BUTTON_TEXT, rect, 2, border_radius=6)
-            text = self._font_label.render(mode_label, True, COLOR_BUTTON_TEXT)
-            surface.blit(text, text.get_rect(center=rect.center))
-
-        return btn_y + self.MODE_BUTTON_HEIGHT + 8

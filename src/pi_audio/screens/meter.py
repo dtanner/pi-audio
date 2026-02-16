@@ -4,11 +4,13 @@ import pygame
 from pi_audio.config import (
     BLOCK_SIZE,
     COLOR_BG,
+    COLOR_BUTTON_BG,
     COLOR_BUTTON_HOVER,
     COLOR_CHART_BG,
     COLOR_GREEN,
     COLOR_GRID,
     COLOR_RED,
+    COLOR_SLIDER_FILL,
     COLOR_TEXT,
     COLOR_YELLOW,
     SAMPLE_RATE,
@@ -30,6 +32,11 @@ class MeterScreen(Screen):
     CHART_RIGHT = 20
     CHART_BOTTOM = 40
     CHART_BOTTOM_SPEC = 10  # less bottom margin when no time labels
+
+    # Toggle button dimensions (match hamburger menu sizing/margin)
+    TOGGLE_SIZE = 40
+    TOGGLE_MARGIN = 10
+    TOGGLE_GAP = 8
 
     # Hamburger menu dimensions
     MENU_ICON_SIZE = 40
@@ -53,6 +60,9 @@ class MeterScreen(Screen):
         self._font_medium: pygame.font.Font | None = None
         self._font_small: pygame.font.Font | None = None
         self._font_icon: pygame.font.Font | None = None
+        self._font_value_only: pygame.font.Font | None = None
+        self._overtones_btn_rect: pygame.Rect | None = None
+        self._meter_btn_rect: pygame.Rect | None = None
         self._menu_icon_rect: pygame.Rect | None = None
         self._menu_open: bool = False
         self._menu_settings_rect: pygame.Rect | None = None
@@ -65,6 +75,7 @@ class MeterScreen(Screen):
             self._font_medium = pygame.font.SysFont("monospace", 28)
             self._font_small = pygame.font.SysFont("monospace", 18)
             self._font_icon = pygame.font.SysFont("monospace", 20)
+            self._font_value_only = pygame.font.SysFont("monospace", 260, bold=True)
 
     def set_audio_data(
         self,
@@ -94,6 +105,10 @@ class MeterScreen(Screen):
                     raise SystemExit
                 else:
                     self._menu_open = False
+            elif self._overtones_btn_rect and self._overtones_btn_rect.collidepoint(event.pos):
+                self._toggle_button("overtones")
+            elif self._meter_btn_rect and self._meter_btn_rect.collidepoint(event.pos):
+                self._toggle_button("meter")
             elif self._menu_icon_rect and self._menu_icon_rect.collidepoint(event.pos):
                 self._menu_open = True
 
@@ -103,8 +118,10 @@ class MeterScreen(Screen):
     def draw(self, surface: pygame.Surface) -> None:
         self._ensure_fonts()
         surface.fill(COLOR_BG)
-        self._draw_readout(surface)
+        if self.settings.display_mode != "value_only":
+            self._draw_readout(surface)
         self._draw_chart(surface)
+        self._draw_toggle_buttons(surface)
         self._draw_menu(surface)
 
     def _spl_color(self, db: float) -> tuple[int, int, int]:
@@ -115,6 +132,109 @@ class MeterScreen(Screen):
             return COLOR_YELLOW
         else:
             return COLOR_RED
+
+    def _toggle_button(self, which: str) -> None:
+        """Toggle a display mode button and compute the new mode."""
+        mode = self.settings.display_mode
+        overtones_on = mode in ("overtones", "both")
+        meter_on = mode in ("meter", "both")
+
+        if which == "overtones":
+            overtones_on = not overtones_on
+        else:
+            meter_on = not meter_on
+
+        if overtones_on and meter_on:
+            new_mode = "both"
+        elif overtones_on:
+            new_mode = "overtones"
+        elif meter_on:
+            new_mode = "meter"
+        else:
+            new_mode = "value_only"
+
+        self.settings.display_mode = new_mode
+        self.settings.save()
+
+    def _draw_toggle_buttons(self, surface: pygame.Surface) -> None:
+        """Draw two toggle buttons in the upper-left corner."""
+        mode = self.settings.display_mode
+        overtones_on = mode in ("overtones", "both")
+        meter_on = mode in ("meter", "both")
+
+        x = self.TOGGLE_MARGIN
+        y = self.TOGGLE_MARGIN
+        sz = self.TOGGLE_SIZE
+        pad = 7  # inner padding
+
+        # --- Overtones button (mini spectrogram: colored vertical columns) ---
+        self._overtones_btn_rect = pygame.Rect(x, y, sz, sz)
+        bg = COLOR_SLIDER_FILL if overtones_on else COLOR_BUTTON_BG
+        pygame.draw.rect(surface, bg, self._overtones_btn_rect, border_radius=4)
+        pygame.draw.rect(surface, COLOR_GRID, self._overtones_btn_rect, 1, border_radius=4)
+        # Draw columns that mimic a spectrogram waterfall (varied colors & heights)
+        inner_w = sz - pad * 2
+        inner_h = sz - pad * 2
+        col_w = max(inner_w // 5, 2)
+        col_colors = [
+            (0, 80, 180),
+            (0, 180, 120),
+            (200, 200, 0),
+            (220, 120, 0),
+            (200, 40, 40),
+        ]
+        col_heights = [0.4, 0.7, 1.0, 0.8, 0.5]
+        for i in range(5):
+            ch = int(inner_h * col_heights[i])
+            cx = x + pad + i * col_w
+            cy = y + pad + inner_h - ch
+            pygame.draw.rect(surface, col_colors[i], (cx, cy, max(col_w - 1, 1), ch))
+
+        # --- Meter button (mini line chart with axes and colored line) ---
+        x2 = x + sz + self.TOGGLE_GAP
+        self._meter_btn_rect = pygame.Rect(x2, y, sz, sz)
+        bg = COLOR_SLIDER_FILL if meter_on else COLOR_BUTTON_BG
+        pygame.draw.rect(surface, bg, self._meter_btn_rect, border_radius=4)
+        pygame.draw.rect(surface, COLOR_GRID, self._meter_btn_rect, 1, border_radius=4)
+        # Draw mini axes (L-shaped)
+        ax_left = x2 + pad
+        ax_bottom = y + sz - pad
+        ax_right = x2 + sz - pad
+        ax_top = y + pad
+        pygame.draw.line(surface, COLOR_GRID, (ax_left, ax_top), (ax_left, ax_bottom), 1)
+        pygame.draw.line(surface, COLOR_GRID, (ax_left, ax_bottom), (ax_right, ax_bottom), 1)
+        # Draw a colored line chart inside the axes
+        chart_points = [
+            (ax_left + 2, ax_bottom - 4),
+            (ax_left + 6, ax_bottom - 10),
+            (ax_left + 10, ax_bottom - 7),
+            (ax_left + 15, ax_bottom - 18),
+            (ax_left + 19, ax_bottom - 14),
+            (ax_left + 23, ax_bottom - 20),
+        ]
+        for i in range(1, len(chart_points)):
+            # Color by height: low=green, mid=yellow, high=red
+            frac = (ax_bottom - chart_points[i][1]) / (ax_bottom - ax_top)
+            if frac < 0.4:
+                c = COLOR_GREEN
+            elif frac < 0.7:
+                c = COLOR_YELLOW
+            else:
+                c = COLOR_RED
+            pygame.draw.line(surface, c, chart_points[i - 1], chart_points[i], 2)
+
+    def _draw_value_only(self, surface: pygame.Surface) -> None:
+        """Draw the SPL value as a large centered number."""
+        color = self._spl_color(self._spl)
+        text = f"{self._spl:.1f}"
+        rendered = self._font_value_only.render(text, True, color)
+        rect = rendered.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10))
+        surface.blit(rendered, rect)
+
+        # Small "dB(A)" label below
+        label = self._font_medium.render("dB(A)", True, COLOR_TEXT)
+        label_rect = label.get_rect(centerx=SCREEN_WIDTH // 2, top=rect.bottom + 5)
+        surface.blit(label, label_rect)
 
     def _draw_readout(self, surface: pygame.Surface) -> None:
         color = self._spl_color(self._spl)
@@ -129,7 +249,10 @@ class MeterScreen(Screen):
         chart_top = self.READOUT_HEIGHT + 5
         mode = self.settings.display_mode
 
-        if mode == "meter":
+        if mode == "value_only":
+            self._draw_value_only(surface)
+            return
+        elif mode == "meter":
             chart_left = self.CHART_LEFT_SPL
             chart_right = SCREEN_WIDTH - self.CHART_RIGHT
             chart_bottom = SCREEN_HEIGHT - self.CHART_BOTTOM

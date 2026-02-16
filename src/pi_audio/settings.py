@@ -53,7 +53,7 @@ class Settings:
         )
 
         # Display mode
-        if self.display_mode not in ("meter", "overtones", "both"):
+        if self.display_mode not in ("meter", "overtones", "both", "value_only"):
             self.display_mode = "both"
 
         # Overtone frequency range: 40–8000 Hz, min < max
