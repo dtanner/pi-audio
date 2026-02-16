@@ -7,13 +7,14 @@ from pi_audio.config import SPEC_DB_MAX, SPEC_DB_MIN, SPEC_FREQ_MAX, SPEC_FREQ_M
 def _build_color_lut() -> np.ndarray:
     """Build a 256-entry RGB color lookup table: dark blue → blue → cyan → yellow → red."""
     lut = np.zeros((256, 3), dtype=np.uint8)
-    # 5 stops: dark-blue(0), blue(64), cyan(128), yellow(192), red(255)
+    # Sharper transition from noise floor to signal for better harmonic contrast
     stops = [
-        (0, (10, 10, 40)),
-        (64, (20, 20, 180)),
-        (128, (0, 200, 220)),
-        (192, (240, 220, 0)),
-        (255, (240, 50, 30)),
+        (0, (5, 5, 15)),
+        (20, (10, 10, 50)),
+        (60, (20, 40, 180)),
+        (120, (0, 200, 220)),
+        (180, (240, 220, 0)),
+        (255, (255, 60, 20)),
     ]
     for i in range(len(stops) - 1):
         idx0, c0 = stops[i]
@@ -32,15 +33,17 @@ class SpectrogramRenderer:
         block_size: int,
         freq_min: float = SPEC_FREQ_MIN,
         freq_max: float = SPEC_FREQ_MAX,
+        fft_size: int | None = None,
     ):
         self._sample_rate = sample_rate
         self._block_size = block_size
+        self._fft_size = fft_size if fft_size is not None else block_size
         self._freq_min = freq_min
         self._freq_max = freq_max
         self._color_lut = _build_color_lut()
 
         # Precompute FFT bin frequencies
-        self._bin_freqs = np.fft.rfftfreq(block_size, 1.0 / sample_rate)
+        self._bin_freqs = np.fft.rfftfreq(self._fft_size, 1.0 / sample_rate)
 
         # We'll lazily build the row→bin mapping when we know the display height
         self._cached_height: int = 0
@@ -78,11 +81,11 @@ class SpectrogramRenderer:
         freqs = 10.0**log_freqs
 
         # Find closest FFT bin for each row
-        bin_resolution = self._sample_rate / self._block_size
+        bin_resolution = self._sample_rate / self._fft_size
         self._row_bin_indices = np.clip(
             np.round(freqs / bin_resolution).astype(int),
             0,
-            self._block_size // 2,
+            self._fft_size // 2,
         )
 
     def _db_to_color_index(self, db_values: np.ndarray) -> np.ndarray:

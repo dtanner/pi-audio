@@ -16,6 +16,7 @@ from pi_audio.config import (
     COLOR_SLIDER_FILL,
     COLOR_TEXT,
     COLOR_YELLOW,
+    FFT_SIZE,
     SAMPLE_RATE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
@@ -63,6 +64,7 @@ class MeterScreen(Screen):
             BLOCK_SIZE,
             freq_min=settings.overtone_freq_min,
             freq_max=settings.overtone_freq_max,
+            fft_size=FFT_SIZE,
         )
         self._font_large: pygame.font.Font | None = None
         self._font_medium: pygame.font.Font | None = None

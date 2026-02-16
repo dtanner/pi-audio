@@ -4,8 +4,9 @@ import threading
 import numpy as np
 import sounddevice as sd
 from scipy.signal import sosfilt, zpk2sos
+from scipy.signal.windows import blackmanharris
 
-from pi_audio.config import BLOCK_SIZE, SAMPLE_RATE
+from pi_audio.config import BLOCK_SIZE, FFT_SIZE, SAMPLE_RATE
 
 
 def _a_weighting_sos(fs: int) -> np.ndarray:
@@ -72,7 +73,7 @@ class AudioCapture:
         self._current_spl: float = 0.0
         self._history: collections.deque[float] = collections.deque(maxlen=history_length)
         self._spectrogram: collections.deque[np.ndarray] = collections.deque(maxlen=history_length)
-        self._hann_window = np.hanning(block_size)
+        self._window = blackmanharris(block_size)
         self._lock = threading.Lock()
         self._stream: sd.InputStream | None = None
 
@@ -99,8 +100,8 @@ class AudioCapture:
             db = 0.0
 
         # FFT on raw (unfiltered) signal for spectrogram
-        windowed = audio[: self.block_size] * self._hann_window[: len(audio)]
-        spectrum = np.fft.rfft(windowed)
+        windowed = audio[: self.block_size] * self._window[: len(audio)]
+        spectrum = np.fft.rfft(windowed, n=FFT_SIZE)
         magnitude = np.abs(spectrum)
         with np.errstate(divide="ignore"):
             mag_db = 20 * np.log10(magnitude + 1e-20)

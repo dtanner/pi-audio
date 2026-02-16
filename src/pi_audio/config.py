@@ -4,6 +4,7 @@ FPS = 30
 
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 4800  # 100ms blocks → 10 Hz update rate
+FFT_SIZE = 16384  # zero-padded FFT for finer frequency resolution (~2.93 Hz/bin)
 HISTORY_SECONDS = 30
 HISTORY_LENGTH = HISTORY_SECONDS * (SAMPLE_RATE // BLOCK_SIZE)  # ~300 values
 
@@ -36,5 +37,5 @@ COLOR_LABEL_DIM = (140, 140, 160)
 # Spectrogram settings
 SPEC_FREQ_MIN = 50.0  # Hz — practical lower bound for USB mics
 SPEC_FREQ_MAX = 8000.0  # Hz — upper musical range
-SPEC_DB_MIN = -80.0  # relative dB floor
+SPEC_DB_MIN = -60.0  # relative dB floor (tighter range for better harmonic contrast)
 SPEC_DB_MAX = 0.0  # relative dB ceiling
