@@ -1,11 +1,14 @@
 # pi-audio
 
-Real-time sound level meter for Raspberry Pi with A-weighted SPL measurement and rolling history display.
+Real-time sound level meter and spectrogram display for Raspberry Pi with A-weighted SPL measurement, rolling history, and FFT-based overtone analysis.
 
 ## Features
 
 - **Live SPL(A) Measurement** - Real-time A-weighted sound pressure level in dB
-- **Rolling History Chart** - 30-second visual history of sound levels
+- **Rolling History Chart** - Configurable visual history of sound levels (5s to 5min)
+- **Spectrogram / Overtone Analyzer** - Scrolling frequency display with logarithmic Y-axis (50 Hz–8 kHz)
+- **Three Display Modes** - Meter only, Overtones only, or Both side-by-side (configurable in settings)
+- **Persistent Settings** - History length, color thresholds, and display mode saved across sessions
 - **Hardware Flexibility** - Designed to work with various Pi models, displays, and USB microphones
 
 ## Quick Start
@@ -73,17 +76,20 @@ Default values: `PI_HOST=admin@piaudio.local`, `PI_PATH=~/pi-audio`
 
 ## Project Structure
 
-- `src/pi_audio/config.py` - Display, audio, and color constants
-- `src/pi_audio/audio.py` - Audio capture and A-weighted SPL calculation
+- `src/pi_audio/config.py` - Display, audio, color, and spectrogram constants
+- `src/pi_audio/audio.py` - Audio capture, A-weighted SPL calculation, and FFT computation
+- `src/pi_audio/spectrogram.py` - Spectrogram renderer (log-frequency mapping, color LUT)
+- `src/pi_audio/settings.py` - Persistent user settings
 - `src/pi_audio/main.py` - pygame initialization and main loop
-- `src/pi_audio/screens/` - Screen implementations (meter display)
+- `src/pi_audio/screens/` - Screen implementations (meter, spectrogram, settings)
 
 ## How It Works
 
 1. **Audio Capture** - Uses `sounddevice` to capture audio from the default ALSA device
 2. **A-Weighting Filter** - Applies IEC 61672:2003 A-weighting filter to match human hearing perception
 3. **SPL Calculation** - Converts RMS amplitude to dB SPL with calibration reference
-4. **Display** - pygame renders current level and rolling history chart
+4. **FFT Analysis** - Applies Hann window and computes FFT on each audio block for spectrogram data
+5. **Display** - pygame renders current level, rolling history chart, and/or spectrogram based on selected mode
 
 ## Contributing
 

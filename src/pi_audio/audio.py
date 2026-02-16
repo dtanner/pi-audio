@@ -71,6 +71,8 @@ class AudioCapture:
         self._sos = _a_weighting_sos(sample_rate)
         self._current_spl: float = 0.0
         self._history: collections.deque[float] = collections.deque(maxlen=history_length)
+        self._spectrogram: collections.deque[np.ndarray] = collections.deque(maxlen=history_length)
+        self._hann_window = np.hanning(block_size)
         self._lock = threading.Lock()
         self._stream: sd.InputStream | None = None
 
@@ -79,6 +81,8 @@ class AudioCapture:
         with self._lock:
             old_data = list(self._history)
             self._history = collections.deque(old_data, maxlen=new_length)
+            old_spec = list(self._spectrogram)
+            self._spectrogram = collections.deque(old_spec, maxlen=new_length)
 
     def _callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
         if status:
@@ -94,9 +98,17 @@ class AudioCapture:
         else:
             db = 0.0
 
+        # FFT on raw (unfiltered) signal for spectrogram
+        windowed = audio[: self.block_size] * self._hann_window[: len(audio)]
+        spectrum = np.fft.rfft(windowed)
+        magnitude = np.abs(spectrum)
+        with np.errstate(divide="ignore"):
+            mag_db = 20 * np.log10(magnitude + 1e-20)
+
         with self._lock:
             self._current_spl = db
             self._history.append(db)
+            self._spectrogram.append(mag_db)
 
     @property
     def current_spl(self) -> float:
@@ -107,6 +119,11 @@ class AudioCapture:
     def history(self) -> list[float]:
         with self._lock:
             return list(self._history)
+
+    @property
+    def spectrogram(self) -> list[np.ndarray]:
+        with self._lock:
+            return list(self._spectrogram)
 
     def start(self) -> None:
         self._stream = sd.InputStream(

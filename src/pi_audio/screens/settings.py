@@ -48,6 +48,13 @@ SLIDERS = [
 ]
 
 
+_DISPLAY_MODES = [
+    ("meter", "Meter"),
+    ("overtones", "Overtones"),
+    ("both", "Both"),
+]
+
+
 class SettingsScreen(Screen):
     # Layout
     SLIDER_WIDTH = 500
@@ -57,6 +64,9 @@ class SettingsScreen(Screen):
     CONTENT_TOP = 110
     BACK_BUTTON_WIDTH = 140
     BACK_BUTTON_HEIGHT = 48
+    MODE_BUTTON_WIDTH = 140
+    MODE_BUTTON_HEIGHT = 40
+    MODE_BUTTON_GAP = 10
 
     def __init__(self, settings: Settings, on_back: callable):
         self.settings = settings
@@ -67,9 +77,11 @@ class SettingsScreen(Screen):
         self._font_hint: pygame.font.Font | None = None
         self._dragging: str | None = None
         self._hovered_slider: str | None = None
+        self._hovered_mode: str | None = None
         self._back_hovered: bool = False
         self._back_rect: pygame.Rect | None = None
         self._slider_rects: dict[str, pygame.Rect] = {}
+        self._mode_rects: dict[str, pygame.Rect] = {}
 
     def _ensure_fonts(self) -> None:
         if self._font_title is None:
@@ -119,6 +131,11 @@ class SettingsScreen(Screen):
                 if rect and rect.collidepoint(mx, my):
                     self._hovered_slider = slider.key
 
+            self._hovered_mode = None
+            for mode_key, rect in self._mode_rects.items():
+                if rect.collidepoint(mx, my):
+                    self._hovered_mode = mode_key
+
             # Handle drag
             if self._dragging:
                 for slider in SLIDERS:
@@ -131,6 +148,13 @@ class SettingsScreen(Screen):
             if self._back_rect and self._back_rect.collidepoint(mx, my):
                 self.on_back()
                 return
+
+            # Check mode buttons
+            for mode_key, rect in self._mode_rects.items():
+                if rect.collidepoint(mx, my):
+                    self.settings.display_mode = mode_key
+                    self.settings.save()
+                    return
 
             # Check slider hit areas
             for i, slider in enumerate(SLIDERS):
@@ -163,6 +187,9 @@ class SettingsScreen(Screen):
         # Slider rows
         for i, slider in enumerate(SLIDERS):
             self._draw_slider_row(surface, i, slider)
+
+        # Display mode selector
+        self._draw_mode_selector(surface)
 
         # Back button
         bx = (SCREEN_WIDTH - self.BACK_BUTTON_WIDTH) // 2
@@ -231,3 +258,37 @@ class SettingsScreen(Screen):
         if index < len(SLIDERS) - 1:
             div_y = track_y + self.SLIDER_HEIGHT + 32
             pygame.draw.line(surface, COLOR_DIVIDER, (sx, div_y), (sx + self.SLIDER_WIDTH, div_y))
+
+    def _draw_mode_selector(self, surface: pygame.Surface) -> None:
+        self._mode_rects.clear()
+        y = self._row_y(len(SLIDERS)) + 10
+
+        # Label
+        label = self._font_label.render("Display Mode", True, COLOR_TEXT)
+        total_width = (
+            len(_DISPLAY_MODES) * self.MODE_BUTTON_WIDTH
+            + (len(_DISPLAY_MODES) - 1) * self.MODE_BUTTON_GAP
+        )
+        start_x = (SCREEN_WIDTH - total_width) // 2
+        surface.blit(label, (start_x, y))
+
+        btn_y = y + 36
+        for i, (mode_key, mode_label) in enumerate(_DISPLAY_MODES):
+            bx = start_x + i * (self.MODE_BUTTON_WIDTH + self.MODE_BUTTON_GAP)
+            rect = pygame.Rect(bx, btn_y, self.MODE_BUTTON_WIDTH, self.MODE_BUTTON_HEIGHT)
+            self._mode_rects[mode_key] = rect
+
+            is_selected = self.settings.display_mode == mode_key
+            is_hovered = self._hovered_mode == mode_key
+
+            if is_selected:
+                bg = COLOR_SLIDER_FILL
+            elif is_hovered:
+                bg = COLOR_BUTTON_HOVER
+            else:
+                bg = COLOR_BUTTON_BG
+
+            pygame.draw.rect(surface, bg, rect, border_radius=6)
+            pygame.draw.rect(surface, COLOR_BUTTON_TEXT, rect, 2, border_radius=6)
+            text = self._font_label.render(mode_label, True, COLOR_BUTTON_TEXT)
+            surface.blit(text, text.get_rect(center=rect.center))

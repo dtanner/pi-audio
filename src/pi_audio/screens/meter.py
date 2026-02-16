@@ -1,6 +1,8 @@
+import numpy as np
 import pygame
 
 from pi_audio.config import (
+    BLOCK_SIZE,
     COLOR_BG,
     COLOR_BUTTON_BG,
     COLOR_BUTTON_HOVER,
@@ -11,6 +13,7 @@ from pi_audio.config import (
     COLOR_RED,
     COLOR_TEXT,
     COLOR_YELLOW,
+    SAMPLE_RATE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     SPL_MAX,
@@ -18,6 +21,7 @@ from pi_audio.config import (
 )
 from pi_audio.screens.base import Screen
 from pi_audio.settings import Settings
+from pi_audio.spectrogram import SpectrogramRenderer
 
 
 class MeterScreen(Screen):
@@ -39,6 +43,8 @@ class MeterScreen(Screen):
         self.on_settings = on_settings
         self._spl: float = 0.0
         self._history: list[float] = []
+        self._spectrogram: list[np.ndarray] = []
+        self._spec_renderer = SpectrogramRenderer(SAMPLE_RATE, BLOCK_SIZE)
         self._font_large: pygame.font.Font | None = None
         self._font_medium: pygame.font.Font | None = None
         self._font_small: pygame.font.Font | None = None
@@ -61,9 +67,16 @@ class MeterScreen(Screen):
                 except Exception:
                     continue
 
-    def set_audio_data(self, spl: float, history: list[float]) -> None:
+    def set_audio_data(
+        self,
+        spl: float,
+        history: list[float],
+        spectrogram: list[np.ndarray] | None = None,
+    ) -> None:
         self._spl = spl
         self._history = history
+        if spectrogram is not None:
+            self._spectrogram = spectrogram
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.MOUSEMOTION:
@@ -119,42 +132,70 @@ class MeterScreen(Screen):
         chart_width = chart_right - chart_left
         chart_height = chart_bottom - chart_top
 
+        mode = self.settings.display_mode
+
+        if mode == "meter":
+            self._draw_spl_chart(surface, chart_left, chart_top, chart_width, chart_height)
+        elif mode == "overtones":
+            self._draw_spectrogram(surface, chart_left, chart_top, chart_width, chart_height)
+        else:  # "both"
+            gap = 10
+            half = (chart_width - gap) // 2
+            self._draw_spectrogram(surface, chart_left, chart_top, half, chart_height)
+            self._draw_spl_chart(
+                surface, chart_left + half + gap, chart_top, chart_width - half - gap, chart_height
+            )
+
+    def _draw_spectrogram(
+        self, surface: pygame.Surface, left: int, top: int, width: int, height: int
+    ) -> None:
+        # Background
+        pygame.draw.rect(surface, COLOR_CHART_BG, (left, top, width, height))
+        rect = pygame.Rect(left, top, width, height)
+        self._spec_renderer.draw(surface, rect, self._spectrogram)
+        # Border
+        pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
+
+    def _draw_spl_chart(
+        self, surface: pygame.Surface, left: int, top: int, width: int, height: int
+    ) -> None:
+        right = left + width
+        bottom = top + height
+
         # Chart background
-        pygame.draw.rect(
-            surface, COLOR_CHART_BG, (chart_left, chart_top, chart_width, chart_height)
-        )
+        pygame.draw.rect(surface, COLOR_CHART_BG, (left, top, width, height))
 
         # Grid lines and labels
         db_range = SPL_MAX - SPL_MIN
         grid_step = 10
         for db in range(int(SPL_MIN), int(SPL_MAX) + 1, grid_step):
-            y = chart_bottom - (db - SPL_MIN) / db_range * chart_height
-            pygame.draw.line(surface, COLOR_GRID, (chart_left, int(y)), (chart_right, int(y)))
+            y = bottom - (db - SPL_MIN) / db_range * height
+            pygame.draw.line(surface, COLOR_GRID, (left, int(y)), (right, int(y)))
             label = self._font_small.render(f"{db}", True, COLOR_TEXT)
-            lx = chart_left - label.get_width() - 8
+            lx = left - label.get_width() - 8
             ly = int(y) - label.get_height() // 2
             surface.blit(label, (lx, ly))
 
         # Time labels
         time_step = 5 if self.settings.history_seconds <= 60 else 30
         for sec in range(0, self.settings.history_seconds + 1, time_step):
-            x = chart_left + sec / self.settings.history_seconds * chart_width
-            pygame.draw.line(surface, COLOR_GRID, (int(x), chart_top), (int(x), chart_bottom))
+            x = left + sec / self.settings.history_seconds * width
+            pygame.draw.line(surface, COLOR_GRID, (int(x), top), (int(x), bottom))
             time_label = f"-{self.settings.history_seconds - sec}s"
             label = self._font_small.render(time_label, True, COLOR_TEXT)
-            surface.blit(label, (int(x) - label.get_width() // 2, chart_bottom + 5))
+            surface.blit(label, (int(x) - label.get_width() // 2, bottom + 5))
 
         # Plot history
         if len(self._history) < 2:
+            pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
             return
 
         points = []
         n = len(self._history)
         for i, db in enumerate(self._history):
-            # Align to right edge — most recent sample at chart_right
-            x = chart_right - (n - 1 - i) / max(self.settings.history_length - 1, 1) * chart_width
+            x = right - (n - 1 - i) / max(self.settings.history_length - 1, 1) * width
             clamped = max(SPL_MIN, min(SPL_MAX, db))
-            y = chart_bottom - (clamped - SPL_MIN) / db_range * chart_height
+            y = bottom - (clamped - SPL_MIN) / db_range * height
             points.append((x, y))
 
         # Draw line segments colored by level
@@ -164,7 +205,7 @@ class MeterScreen(Screen):
             pygame.draw.line(surface, color, points[i - 1], points[i], 2)
 
         # Chart border
-        pygame.draw.rect(surface, COLOR_GRID, (chart_left, chart_top, chart_width, chart_height), 1)
+        pygame.draw.rect(surface, COLOR_GRID, (left, top, width, height), 1)
 
     def _draw_buttons(self, surface: pygame.Surface) -> None:
         # Position buttons in top-right corner

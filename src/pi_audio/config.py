@@ -32,3 +32,9 @@ COLOR_SLIDER_HANDLE = (220, 220, 230)
 COLOR_SLIDER_HANDLE_ACTIVE = (255, 255, 255)
 COLOR_DIVIDER = (50, 50, 65)
 COLOR_LABEL_DIM = (140, 140, 160)
+
+# Spectrogram settings
+SPEC_FREQ_MIN = 50.0  # Hz — practical lower bound for USB mics
+SPEC_FREQ_MAX = 8000.0  # Hz — upper musical range
+SPEC_DB_MIN = -80.0  # relative dB floor
+SPEC_DB_MAX = 0.0  # relative dB ceiling

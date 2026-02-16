@@ -3,7 +3,7 @@ from pathlib import Path
 
 _SETTINGS_PATH = Path.home() / ".config" / "pi-audio" / "settings.json"
 
-_KEYS = ("history_seconds", "quiet_threshold", "moderate_threshold")
+_KEYS = ("history_seconds", "quiet_threshold", "moderate_threshold", "display_mode")
 
 
 class Settings:
@@ -16,6 +16,9 @@ class Settings:
         # Sound level thresholds in dB(A)
         self.quiet_threshold: float = 75.0  # Safe/green zone upper limit
         self.moderate_threshold: float = 90.0  # Cautious/yellow zone upper limit
+
+        # Display mode: "meter", "overtones", or "both"
+        self.display_mode: str = "both"
 
         self._load()
 
@@ -37,6 +40,10 @@ class Settings:
         self.moderate_threshold = max(
             self.quiet_threshold + 1.0, min(100.0, self.moderate_threshold)
         )
+
+        # Display mode
+        if self.display_mode not in ("meter", "overtones", "both"):
+            self.display_mode = "both"
 
     def save(self) -> None:
         """Persist current settings to disk."""
