@@ -10,7 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Current SPL(A) level
 - Rolling history chart of the last 30 seconds of the sound level
 - Scrolling spectrogram / overtone analyzer (FFT-based, logarithmic frequency axis)
-- Three display modes: Meter only, Overtones only, or Both side-by-side
+- Real-time pitch detection (YIN algorithm) with note name, octave, cents deviation, and piano-roll chart
+- Flexible panel layout: toggle up to two panels (Overtones, Meter, Pitch) or show current values only
 - Configurable via in-app settings screen (persisted to `~/.config/pi-audio/settings.json`)
 
 ## Build & Run
@@ -50,12 +51,13 @@ The Pi uses a pre-existing `.venv` directory. The app runs via `source .venv/bin
 
 - `src/pi_audio/config.py` — constants (display, audio, colors, spectrogram)
 - `src/pi_audio/audio.py` — audio capture via sounddevice, A-weighted SPL calculation, FFT for spectrogram
+- `src/pi_audio/pitch.py` — YIN-based pitch detection (frequency estimation, note/octave/cents mapping)
 - `src/pi_audio/spectrogram.py` — spectrogram renderer (log-frequency mapping, color LUT, pygame surface rendering)
 - `src/pi_audio/settings.py` — persistent user settings (history length, thresholds, display mode)
 - `src/pi_audio/main.py` — pygame init, main loop, screen management
 - `src/pi_audio/screens/base.py` — abstract Screen base class
-- `src/pi_audio/screens/meter.py` — SPL readout + rolling history chart + spectrogram (3 layout modes)
-- `src/pi_audio/screens/settings.py` — settings UI with sliders and display mode selector
+- `src/pi_audio/screens/meter.py` — SPL readout + rolling history chart + spectrogram + pitch panel (flexible panel layout)
+- `src/pi_audio/screens/settings.py` — settings UI with sliders
 
 ## Hardware Compatibility
 

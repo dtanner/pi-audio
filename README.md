@@ -1,6 +1,6 @@
 # pi-audio
 
-Real-time sound level meter and spectrogram display for Raspberry Pi with A-weighted SPL measurement, rolling history, and FFT-based overtone analysis.
+Real-time sound level meter, spectrogram, and pitch detector for Raspberry Pi with A-weighted SPL measurement, rolling history, FFT-based overtone analysis, and YIN-based pitch detection.
 
 ![pi-audio screenshot](docs/screenshot.png)
 
@@ -9,7 +9,8 @@ Real-time sound level meter and spectrogram display for Raspberry Pi with A-weig
 - **Live SPL(A) Measurement** - Real-time A-weighted sound pressure level in dB
 - **Rolling History Chart** - Configurable visual history of sound levels (5s to 5min)
 - **Spectrogram / Overtone Analyzer** - Scrolling frequency display with logarithmic Y-axis and configurable frequency range (40 Hz–8 kHz)
-- **Four Display Modes** - Meter only, Overtones only, Both side-by-side, or Current value only
+- **Pitch Detection** - Real-time fundamental pitch detection using the YIN algorithm with note name, octave, cents deviation, and piano-roll history chart
+- **Flexible Panel Layout** - Toggle up to two panels at once from three types (Overtones, Meter, Pitch), or show current values only
 - **In-App Help** - Built-in help overlay accessible from the menu
 - **Persistent Settings** - History length, color thresholds, frequency range, and display mode saved across sessions
 - **Hardware Flexibility** - Designed to work with various Pi models, displays, and USB microphones
@@ -81,6 +82,7 @@ Default values: `PI_HOST=admin@piaudio.local`, `PI_PATH=~/pi-audio`
 
 - `src/pi_audio/config.py` - Display, audio, color, and spectrogram constants
 - `src/pi_audio/audio.py` - Audio capture, A-weighted SPL calculation, and FFT computation
+- `src/pi_audio/pitch.py` - YIN-based pitch detection (frequency, note name, cents deviation)
 - `src/pi_audio/spectrogram.py` - Spectrogram renderer (log-frequency mapping, color LUT)
 - `src/pi_audio/settings.py` - Persistent user settings
 - `src/pi_audio/main.py` - pygame initialization and main loop
@@ -92,7 +94,8 @@ Default values: `PI_HOST=admin@piaudio.local`, `PI_PATH=~/pi-audio`
 2. **A-Weighting Filter** - Applies IEC 61672:2003 A-weighting filter to match human hearing perception
 3. **SPL Calculation** - Converts RMS amplitude to dB SPL with calibration reference
 4. **FFT Analysis** - Applies Hann window and computes FFT on each audio block for spectrogram data
-5. **Display** - pygame renders current level, rolling history chart, and/or spectrogram based on selected mode
+5. **Pitch Detection** - YIN algorithm estimates fundamental frequency from raw audio with sub-sample accuracy
+6. **Display** - pygame renders current level, rolling history chart, spectrogram, and/or pitch panel based on active toggles
 
 ## Contributing
 
