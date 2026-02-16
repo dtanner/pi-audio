@@ -96,16 +96,23 @@ class SpectrogramRenderer:
 
         n_cols = len(spectrogram_data)
         if n_cols > 0:
-            # We show at most `width` columns, right-aligned (most recent at right)
-            start = max(0, n_cols - width)
-            visible = spectrogram_data[start:]
-            col_offset = width - len(visible)
-
-            for col_idx, mag_db in enumerate(visible):
-                # Sample magnitude at the frequency rows
-                row_values = mag_db[self._row_bin_indices]
-                color_indices = self._db_to_color_index(row_values)
-                pixels[:, col_offset + col_idx] = self._color_lut[color_indices]
+            if n_cols >= width:
+                # More data than pixels: show the most recent `width` columns
+                visible = spectrogram_data[n_cols - width :]
+                for col_idx, mag_db in enumerate(visible):
+                    row_values = mag_db[self._row_bin_indices]
+                    color_indices = self._db_to_color_index(row_values)
+                    pixels[:, col_idx] = self._color_lut[color_indices]
+            else:
+                # Fewer data points than pixels: stretch to fill the width
+                for px in range(width):
+                    # Map pixel to data index (right-aligned, most recent at right)
+                    data_idx = int(px * n_cols / width)
+                    data_idx = min(data_idx, n_cols - 1)
+                    mag_db = spectrogram_data[data_idx]
+                    row_values = mag_db[self._row_bin_indices]
+                    color_indices = self._db_to_color_index(row_values)
+                    pixels[:, px] = self._color_lut[color_indices]
 
         # Transpose to (width, height, 3) for pygame surfarray
         pixel_surf = pygame.surfarray.make_surface(pixels.transpose(1, 0, 2))
