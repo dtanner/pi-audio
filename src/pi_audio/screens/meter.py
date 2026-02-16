@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pygame
 
@@ -63,6 +65,8 @@ class MeterScreen(Screen):
         self._font_value_only: pygame.font.Font | None = None
         self._overtones_btn_rect: pygame.Rect | None = None
         self._meter_btn_rect: pygame.Rect | None = None
+        self._icon_overtones: pygame.Surface | None = None
+        self._icon_meter: pygame.Surface | None = None
         self._menu_icon_rect: pygame.Rect | None = None
         self._menu_open: bool = False
         self._menu_settings_rect: pygame.Rect | None = None
@@ -76,6 +80,15 @@ class MeterScreen(Screen):
             self._font_small = pygame.font.SysFont("monospace", 18)
             self._font_icon = pygame.font.SysFont("monospace", 20)
             self._font_value_only = pygame.font.SysFont("monospace", 260, bold=True)
+            # Load toggle button icons
+            assets = Path(__file__).resolve().parent.parent / "assets"
+            sz = self.TOGGLE_SIZE - 4  # leave room for border
+            self._icon_overtones = pygame.transform.smoothscale(
+                pygame.image.load(str(assets / "icon_overtones.png")).convert(), (sz, sz)
+            )
+            self._icon_meter = pygame.transform.smoothscale(
+                pygame.image.load(str(assets / "icon_meter.png")).convert(), (sz, sz)
+            )
 
     def set_audio_data(
         self,
@@ -157,7 +170,7 @@ class MeterScreen(Screen):
         self.settings.save()
 
     def _draw_toggle_buttons(self, surface: pygame.Surface) -> None:
-        """Draw two toggle buttons in the upper-left corner."""
+        """Draw two toggle buttons in the upper-left corner using icon images."""
         mode = self.settings.display_mode
         overtones_on = mode in ("overtones", "both")
         meter_on = mode in ("meter", "both")
@@ -165,63 +178,36 @@ class MeterScreen(Screen):
         x = self.TOGGLE_MARGIN
         y = self.TOGGLE_MARGIN
         sz = self.TOGGLE_SIZE
-        pad = 7  # inner padding
 
-        # --- Overtones button (mini spectrogram: colored vertical columns) ---
-        self._overtones_btn_rect = pygame.Rect(x, y, sz, sz)
-        bg = COLOR_SLIDER_FILL if overtones_on else COLOR_BUTTON_BG
-        pygame.draw.rect(surface, bg, self._overtones_btn_rect, border_radius=4)
-        pygame.draw.rect(surface, COLOR_GRID, self._overtones_btn_rect, 1, border_radius=4)
-        # Draw columns that mimic a spectrogram waterfall (varied colors & heights)
-        inner_w = sz - pad * 2
-        inner_h = sz - pad * 2
-        col_w = max(inner_w // 5, 2)
-        col_colors = [
-            (0, 80, 180),
-            (0, 180, 120),
-            (200, 200, 0),
-            (220, 120, 0),
-            (200, 40, 40),
-        ]
-        col_heights = [0.4, 0.7, 1.0, 0.8, 0.5]
-        for i in range(5):
-            ch = int(inner_h * col_heights[i])
-            cx = x + pad + i * col_w
-            cy = y + pad + inner_h - ch
-            pygame.draw.rect(surface, col_colors[i], (cx, cy, max(col_w - 1, 1), ch))
+        for i, (on, icon, attr) in enumerate(
+            [
+                (overtones_on, self._icon_overtones, "_overtones_btn_rect"),
+                (meter_on, self._icon_meter, "_meter_btn_rect"),
+            ]
+        ):
+            bx = x + i * (sz + self.TOGGLE_GAP)
+            rect = pygame.Rect(bx, y, sz, sz)
+            setattr(self, attr, rect)
 
-        # --- Meter button (mini line chart with axes and colored line) ---
-        x2 = x + sz + self.TOGGLE_GAP
-        self._meter_btn_rect = pygame.Rect(x2, y, sz, sz)
-        bg = COLOR_SLIDER_FILL if meter_on else COLOR_BUTTON_BG
-        pygame.draw.rect(surface, bg, self._meter_btn_rect, border_radius=4)
-        pygame.draw.rect(surface, COLOR_GRID, self._meter_btn_rect, 1, border_radius=4)
-        # Draw mini axes (L-shaped)
-        ax_left = x2 + pad
-        ax_bottom = y + sz - pad
-        ax_right = x2 + sz - pad
-        ax_top = y + pad
-        pygame.draw.line(surface, COLOR_GRID, (ax_left, ax_top), (ax_left, ax_bottom), 1)
-        pygame.draw.line(surface, COLOR_GRID, (ax_left, ax_bottom), (ax_right, ax_bottom), 1)
-        # Draw a colored line chart inside the axes
-        chart_points = [
-            (ax_left + 2, ax_bottom - 4),
-            (ax_left + 6, ax_bottom - 10),
-            (ax_left + 10, ax_bottom - 7),
-            (ax_left + 15, ax_bottom - 18),
-            (ax_left + 19, ax_bottom - 14),
-            (ax_left + 23, ax_bottom - 20),
-        ]
-        for i in range(1, len(chart_points)):
-            # Color by height: low=green, mid=yellow, high=red
-            frac = (ax_bottom - chart_points[i][1]) / (ax_bottom - ax_top)
-            if frac < 0.4:
-                c = COLOR_GREEN
-            elif frac < 0.7:
-                c = COLOR_YELLOW
-            else:
-                c = COLOR_RED
-            pygame.draw.line(surface, c, chart_points[i - 1], chart_points[i], 2)
+            # Background fill
+            bg = COLOR_SLIDER_FILL if on else COLOR_BUTTON_BG
+            pygame.draw.rect(surface, bg, rect, border_radius=4)
+
+            # Blit the icon image centered in the button
+            if icon is not None:
+                ix = bx + (sz - icon.get_width()) // 2
+                iy = y + (sz - icon.get_height()) // 2
+                surface.blit(icon, (ix, iy))
+
+            # Dim overlay when off
+            if not on:
+                dim = pygame.Surface((sz, sz), pygame.SRCALPHA)
+                dim.fill((0, 0, 0, 140))
+                surface.blit(dim, (bx, y))
+
+            # Border
+            border_color = COLOR_SLIDER_FILL if on else COLOR_GRID
+            pygame.draw.rect(surface, border_color, rect, 2, border_radius=4)
 
     def _draw_value_only(self, surface: pygame.Surface) -> None:
         """Draw the SPL value as a large centered number."""

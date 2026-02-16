@@ -10,10 +10,15 @@ from pi_audio.settings import Settings
 
 
 def main() -> None:
+    import os
+
+    windowed = "--windowed" in sys.argv or os.environ.get("PI_AUDIO_WINDOWED") == "1"
+
     pygame.init()
     pygame.mouse.set_visible(True)
 
-    surface = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
+    flags = 0 if windowed else pygame.FULLSCREEN
+    surface = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
     pygame.display.set_caption("pi-audio")
     clock = pygame.time.Clock()
 
