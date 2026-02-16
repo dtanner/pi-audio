@@ -136,6 +136,11 @@ class SpectrogramRenderer:
             ly = y - label.get_height() // 2
             # Clamp to rect bounds
             ly = max(rect.y, min(rect.y + rect.height - label.get_height(), ly))
+            # Dark background so label is readable over spectrogram data
+            bg_rect = pygame.Rect(lx - 2, ly - 1, label.get_width() + 4, label.get_height() + 2)
+            bg_surf = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+            bg_surf.fill((0, 0, 0, 180))
+            surface.blit(bg_surf, bg_rect.topleft)
             surface.blit(label, (lx, ly))
             # Tick mark
             pygame.draw.line(surface, (80, 80, 100), (rect.x, y), (rect.x + 3, y))

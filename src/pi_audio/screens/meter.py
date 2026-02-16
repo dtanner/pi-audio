@@ -139,7 +139,7 @@ class MeterScreen(Screen):
         elif mode == "overtones":
             self._draw_spectrogram(surface, chart_left, chart_top, chart_width, chart_height)
         else:  # "both"
-            gap = 10
+            gap = 60  # room for SPL y-axis labels between the two charts
             half = (chart_width - gap) // 2
             self._draw_spectrogram(surface, chart_left, chart_top, half, chart_height)
             self._draw_spl_chart(
