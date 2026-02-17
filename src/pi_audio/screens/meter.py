@@ -17,6 +17,8 @@ from pi_audio.config import (
     COLOR_RED,
     COLOR_SLIDER_FILL,
     COLOR_TEXT,
+    COLOR_TUNER_BG,
+    COLOR_TUNER_CENTER,
     COLOR_YELLOW,
     FFT_SIZE,
     SAMPLE_RATE,
@@ -98,6 +100,12 @@ class MeterScreen(Screen):
         self._hovered_menu_item: str | None = None
         self._help_open: bool = False
         self._help_close_rect: pygame.Rect | None = None
+        # Tuner smoothing state
+        self._smoothed_cents: float = 0.0
+        self._stable_note: str = "---"
+        self._stable_note_frames: int = 0
+        self._last_raw_note: str | None = None
+        self._no_pitch_frames: int = 0
 
     def _ensure_fonts(self) -> None:
         if self._font_large is None:
@@ -175,7 +183,35 @@ class MeterScreen(Screen):
                         break
 
     def update(self, dt: float) -> None:
-        pass
+        alpha = 0.15  # EMA smoothing factor (~200ms settling at 30fps)
+        note_stability_frames = 5  # ~150ms before note name changes
+        no_pitch_timeout = 10  # ~300ms before clearing display
+
+        if self._pitch is not None:
+            note_name, octave, cents = freq_to_note(self._pitch)
+            raw_note = f"{note_name}{octave}"
+
+            # EMA smooth the cents value
+            self._smoothed_cents = alpha * cents + (1 - alpha) * self._smoothed_cents
+            self._no_pitch_frames = 0
+
+            # Note stability: only update displayed note after consistent detection
+            if raw_note == self._last_raw_note:
+                self._stable_note_frames += 1
+            else:
+                self._stable_note_frames = 1
+                self._last_raw_note = raw_note
+
+            if self._stable_note_frames >= note_stability_frames:
+                self._stable_note = raw_note
+        else:
+            self._no_pitch_frames += 1
+            # Decay smoothed cents toward 0
+            self._smoothed_cents *= 0.85
+            if self._no_pitch_frames >= no_pitch_timeout:
+                self._stable_note = "---"
+                self._last_raw_note = None
+                self._stable_note_frames = 0
 
     def draw(self, surface: pygame.Surface) -> None:
         self._ensure_fonts()
@@ -316,30 +352,22 @@ class MeterScreen(Screen):
         spl_text = f"{self._spl:.1f}"
         spl_surf = self._font_value_only.render(spl_text, True, color)
 
-        # Pre-render pitch surface to measure total height
-        if self._pitch is not None:
-            note_name, octave, cents = freq_to_note(self._pitch)
-            note_text = f"{note_name}{octave}"
-            note_surf = self._font_value_only.render(note_text, True, COLOR_PITCH)
-            cents_text = f"+{cents}" if cents >= 0 else f"{cents}"
-            if abs(cents) <= 10:
-                cents_color = COLOR_GREEN
-            elif abs(cents) <= 25:
-                cents_color = COLOR_YELLOW
-            else:
-                cents_color = COLOR_RED
-            cents_surf = self._font_large.render(cents_text, True, cents_color)
+        # Pre-render pitch surface using smoothed values
+        has_pitch = self._stable_note != "---"
+        if has_pitch:
+            note_surf = self._font_value_only.render(self._stable_note, True, COLOR_PITCH)
             pitch_height = note_surf.get_height()
         else:
             note_surf = None
-            cents_surf = None
-            cents_color = None
             dash_surf = self._font_value_only.render("---", True, COLOR_LABEL_DIM)
             pitch_height = dash_surf.get_height()
 
+        # Gauge and cents text height
+        gauge_extra = 50  # space for gauge + cents text below note
+
         # Calculate total content height and center vertically
         gap = 20  # vertical gap between SPL and pitch
-        total_height = spl_surf.get_height() + gap + pitch_height
+        total_height = spl_surf.get_height() + gap + pitch_height + gauge_extra
         content_top = available_top + (available_bottom - available_top - total_height) // 2
 
         # Draw SPL value
@@ -349,17 +377,29 @@ class MeterScreen(Screen):
         # Draw pitch value below
         pitch_y = spl_rect.bottom + gap
         if note_surf is not None:
-            gap = 10
-            # Use fixed-width measurements so position doesn't shift
-            note_max_w = self._font_value_only.size("G#8")[0]
-            cents_max_w = self._font_large.size("+50")[0]
-            total_w = note_max_w + gap + cents_max_w
-            # Right-align note within its fixed region
-            note_region_right = (SCREEN_WIDTH - total_w) // 2 + note_max_w
-            note_rect = note_surf.get_rect(right=note_region_right, top=pitch_y)
+            note_rect = note_surf.get_rect(centerx=SCREEN_WIDTH // 2, top=pitch_y)
             surface.blit(note_surf, note_rect)
-            # Left-align cents after the fixed note region
-            cents_rect = cents_surf.get_rect(left=note_region_right + gap, top=note_rect.top + 10)
+
+            # Tuner gauge below note
+            cents = self._smoothed_cents
+            if abs(cents) <= 8:
+                cents_color = COLOR_GREEN
+            elif abs(cents) <= 20:
+                cents_color = COLOR_YELLOW
+            else:
+                cents_color = COLOR_RED
+
+            gauge_w = 300
+            gauge_h = 16
+            gauge_x = (SCREEN_WIDTH - gauge_w) // 2
+            gauge_y = note_rect.bottom + 10
+            self._draw_tuner_gauge(surface, gauge_x, gauge_y, gauge_w, gauge_h, cents, cents_color)
+
+            # Small cents text below gauge
+            cents_int = round(cents)
+            cents_text = f"+{cents_int}" if cents_int >= 0 else f"{cents_int}"
+            cents_surf = self._font_pitch_cents.render(cents_text, True, cents_color)
+            cents_rect = cents_surf.get_rect(centerx=SCREEN_WIDTH // 2, top=gauge_y + gauge_h + 4)
             surface.blit(cents_surf, cents_rect)
         else:
             dash_rect = dash_surf.get_rect(centerx=SCREEN_WIDTH // 2, top=pitch_y)
@@ -401,22 +441,22 @@ class MeterScreen(Screen):
 
     def _render_pitch_surfaces(
         self,
-    ) -> tuple[pygame.Surface | None, pygame.Surface | None, tuple | None]:
-        """Pre-render pitch note and cents surfaces for measurement."""
-        if self._pitch is None:
-            return None, None, None
-        note_name, octave, cents = freq_to_note(self._pitch)
-        note_text = f"{note_name}{octave}"
-        note_surf = self._font_pitch_large.render(note_text, True, COLOR_PITCH)
-        cents_text = f"+{cents}" if cents >= 0 else f"{cents}"
-        if abs(cents) <= 10:
+    ) -> tuple[pygame.Surface | None, float, tuple]:
+        """Pre-render pitch note surface and return smoothed cents info.
+
+        Returns (note_surf_or_None, smoothed_cents, cents_color).
+        """
+        if self._stable_note == "---":
+            return None, 0.0, COLOR_LABEL_DIM
+        note_surf = self._font_pitch_large.render(self._stable_note, True, COLOR_PITCH)
+        cents = self._smoothed_cents
+        if abs(cents) <= 8:
             cents_color = COLOR_GREEN
-        elif abs(cents) <= 25:
+        elif abs(cents) <= 20:
             cents_color = COLOR_YELLOW
         else:
             cents_color = COLOR_RED
-        cents_surf = self._font_pitch_cents.render(cents_text, True, cents_color)
-        return note_surf, cents_surf, cents_color
+        return note_surf, cents, cents_color
 
     def _draw_pitch_readout(
         self,
@@ -424,30 +464,81 @@ class MeterScreen(Screen):
         cy: int,
         centerx: int,
         note_surf: pygame.Surface | None,
-        cents_surf: pygame.Surface | None,
-        cents_color: tuple | None,
+        cents: float,
+        cents_color: tuple,
     ) -> None:
-        """Draw pitch note name + cents deviation centered on the given x coordinate."""
+        """Draw pitch note name + tuner gauge centered on the given x coordinate."""
 
         if note_surf is not None:
-            gap = 4
-            # Use fixed-width measurements so position doesn't shift
+            gauge_w = 140
+            gauge_h = 12
+            gap = 8
+
+            # Layout: note name on left, gauge on right
             note_max_w = self._font_pitch_large.size("G#8")[0]
-            cents_max_w = self._font_pitch_cents.size("+50")[0]
-            total_w = note_max_w + gap + cents_max_w
+            total_w = note_max_w + gap + gauge_w
             left = centerx - total_w // 2
-            # Right-align note within its fixed region
+
+            # Draw note name (right-aligned in its region)
             note_region_right = left + note_max_w
             note_rect = note_surf.get_rect(right=note_region_right, centery=cy)
             surface.blit(note_surf, note_rect)
-            # Left-align cents after the fixed note region
-            cents_rect = cents_surf.get_rect(left=note_region_right + gap, top=note_rect.top + 8)
+
+            # Draw tuner gauge
+            gauge_x = note_region_right + gap
+            gauge_y = cy - gauge_h // 2 - 6
+            self._draw_tuner_gauge(surface, gauge_x, gauge_y, gauge_w, gauge_h, cents, cents_color)
+
+            # Small cents text below gauge
+            cents_int = round(cents)
+            cents_text = f"+{cents_int}" if cents_int >= 0 else f"{cents_int}"
+            cents_surf = self._font_small.render(cents_text, True, cents_color)
+            cents_rect = cents_surf.get_rect(
+                centerx=gauge_x + gauge_w // 2, top=gauge_y + gauge_h + 4
+            )
             surface.blit(cents_surf, cents_rect)
         else:
-            # No pitch detected
             dash_surf = self._font_pitch_large.render("---", True, COLOR_LABEL_DIM)
             dash_rect = dash_surf.get_rect(centerx=centerx, centery=cy)
             surface.blit(dash_surf, dash_rect)
+
+    def _draw_tuner_gauge(
+        self,
+        surface: pygame.Surface,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        cents: float,
+        indicator_color: tuple,
+    ) -> None:
+        """Draw a horizontal tuner gauge with center tick and needle indicator."""
+        cx = x + w // 2
+
+        # Gauge background
+        pygame.draw.rect(surface, COLOR_TUNER_BG, (x, y, w, h), border_radius=3)
+
+        # Green glow at center when in tune
+        if abs(cents) <= 8:
+            glow_w = max(4, w // 6)
+            glow_rect = pygame.Rect(cx - glow_w // 2, y, glow_w, h)
+            glow_surf = pygame.Surface((glow_w, h), pygame.SRCALPHA)
+            glow_surf.fill((*COLOR_GREEN, 60))
+            surface.blit(glow_surf, glow_rect)
+
+        # Center tick mark
+        pygame.draw.line(surface, COLOR_TUNER_CENTER, (cx, y), (cx, y + h), 2)
+
+        # Indicator position: ±50 cents maps to full gauge width
+        clamped_cents = max(-50.0, min(50.0, cents))
+        needle_x = cx + int(clamped_cents / 50.0 * (w // 2))
+
+        # Draw needle as a filled circle
+        needle_r = max(4, h // 2 + 2)
+        pygame.draw.circle(surface, indicator_color, (needle_x, y + h // 2), needle_r)
+
+        # Gauge border
+        pygame.draw.rect(surface, COLOR_TUNER_CENTER, (x, y, w, h), 1, border_radius=3)
 
     def _draw_chart(self, surface: pygame.Surface) -> None:
         chart_top = self.READOUT_HEIGHT + 5
