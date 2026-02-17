@@ -1,6 +1,8 @@
 # pi-audio
 
-Real-time sound level meter, spectrogram, and pitch detector for Raspberry Pi with A-weighted SPL measurement, rolling history, FFT-based overtone analysis, and YIN-based pitch detection.
+Real-time sound level meter, spectrogram, and pitch detector for Raspberry Pi with configurable rolling history charts.
+
+I built this as a music practice tool.
 
 ![pi-audio screenshot](docs/screenshot.png)
 
@@ -11,7 +13,6 @@ Real-time sound level meter, spectrogram, and pitch detector for Raspberry Pi wi
 - **Spectrogram / Overtone Analyzer** - Scrolling frequency display with logarithmic Y-axis and configurable frequency range (40 Hz–8 kHz)
 - **Pitch Detection** - Real-time fundamental pitch detection using the YIN algorithm with note name, octave, cents deviation, and piano-roll history chart
 - **Flexible Panel Layout** - Toggle up to two panels at once from three types (Overtones, Meter, Pitch), or show current values only
-- **In-App Help** - Built-in help overlay accessible from the menu
 - **Persistent Settings** - History length, color thresholds, frequency range, and display mode saved across sessions
 - **Hardware Flexibility** - Designed to work with various Pi models, displays, and USB microphones
 
@@ -20,7 +21,7 @@ Real-time sound level meter, spectrogram, and pitch detector for Raspberry Pi wi
 ### Prerequisites
 
 - Raspberry Pi (tested on Pi 5, should work on Pi 4)
-- HDMI display (any resolution)
+- HDMI display (any resolution, developed on 7" display)
 - USB microphone
 - Raspberry Pi OS (64-bit) Desktop
 
@@ -96,13 +97,6 @@ Default values: `PI_HOST=admin@piaudio.local`, `PI_PATH=~/pi-audio`
 4. **FFT Analysis** - Applies Hann window and computes FFT on each audio block for spectrogram data
 5. **Pitch Detection** - YIN algorithm estimates fundamental frequency from raw audio with sub-sample accuracy
 6. **Display** - pygame renders current level, rolling history chart, spectrogram, and/or pitch panel based on active toggles
-
-## Contributing
-
-Contributions welcome! Especially:
-- New hardware configuration documentation
-- Calibration improvements
-- UI enhancements
 
 ## License
 
