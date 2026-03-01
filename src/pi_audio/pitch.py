@@ -55,36 +55,44 @@ def yin_pitch(
 
 
 def _difference_function(audio: np.ndarray, tau_max: int) -> np.ndarray:
-    """Compute the YIN difference function using FFT for efficiency."""
-    n = len(audio)
+    """Compute the YIN difference function using FFT for efficiency.
+
+    Uses the windowed approach where W = tau_max and the autocorrelation
+    is computed only over the first W samples (truncated signal) so that
+    the energy and correlation terms are consistent.
+    """
+    w = tau_max
+    # Truncate to the analysis window so the FFT-based autocorrelation
+    # matches the energy terms (both sum over j in [0, W)).
+    x = audio[:w].copy()
+
     # Pad to next power of 2 for FFT efficiency
     fft_size = 1
-    while fft_size < n:
+    while fft_size < 2 * w:
         fft_size <<= 1
-    fft_size <<= 1  # double for autocorrelation
 
-    # Autocorrelation via FFT
-    audio_padded = np.zeros(fft_size)
-    audio_padded[:n] = audio
-    fft_audio = np.fft.rfft(audio_padded)
-    acf = np.fft.irfft(fft_audio * np.conj(fft_audio))
+    # Autocorrelation via FFT on the truncated signal
+    x_padded = np.zeros(fft_size)
+    x_padded[:w] = x
+    fft_x = np.fft.rfft(x_padded)
+    acf = np.fft.irfft(fft_x * np.conj(fft_x))
 
     # Energy terms
-    # d(tau) = r(0) + r_shifted(0) - 2*acf(tau)
-    # r(0) = sum of x[j]^2 for j in [0, W)
-    # r_shifted(tau) = sum of x[j+tau]^2 for j in [0, W)
-    w = tau_max
-    x_sq = audio[:n] ** 2
-    # Cumulative sum for efficient energy computation
+    # d(tau) = sum_{j=0}^{W-1-tau} (x[j] - x[j+tau])^2
+    #        = r_head(tau) + r_tail(tau) - 2*acf(tau)
+    # where r_head(tau) = sum_{j=0}^{W-1-tau} x[j]^2
+    #       r_tail(tau) = sum_{j=tau}^{W-1}   x[j]^2
+    x_sq = x**2
     cum = np.concatenate(([0.0], np.cumsum(x_sq)))
-
-    energy_start = cum[w] - cum[0]  # sum of x[0..W-1]^2
 
     d = np.zeros(tau_max)
     d[0] = 0.0
     for tau in range(1, tau_max):
-        energy_shifted = cum[w + tau] - cum[tau]  # sum of x[tau..tau+W-1]^2
-        d[tau] = energy_start + energy_shifted - 2.0 * acf[tau]
+        # sum of x[0..W-1-tau]^2
+        r_head = cum[w - tau] - cum[0]
+        # sum of x[tau..W-1]^2
+        r_tail = cum[w] - cum[tau]
+        d[tau] = r_head + r_tail - 2.0 * acf[tau]
 
     return d
 
