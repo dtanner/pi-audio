@@ -44,8 +44,8 @@ class MeterScreen(Screen):
     CHART_BOTTOM_SPEC = 10  # less bottom margin when no time labels
     CHART_BOTTOM_PITCH = 10
 
-    # Toggle button dimensions (match hamburger menu sizing/margin)
-    TOGGLE_SIZE = 40
+    # Toggle button dimensions (match pause button sizing/alignment)
+    TOGGLE_SIZE = 60
     TOGGLE_MARGIN = 10
     TOGGLE_GAP = 8
 
@@ -266,8 +266,8 @@ class MeterScreen(Screen):
         }
 
         x = self.TOGGLE_MARGIN
-        y = self.TOGGLE_MARGIN
         sz = self.TOGGLE_SIZE
+        y = (self.READOUT_HEIGHT - sz) // 2
 
         self._toggle_btn_rects.clear()
         for i, name in enumerate(self._PANEL_NAMES):
